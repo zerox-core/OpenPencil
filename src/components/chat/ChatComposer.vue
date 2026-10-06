@@ -7,6 +7,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from '@open-pencil/vue'
 
 import { createAIModelRuntime } from '@/app/ai/models'
+import { resolveVoiceAsrKey, transcribeAudio, VoiceAsrError } from '@/app/ai/voice/asr'
 import IconButton from '@/components/ui/button/IconButton.vue'
 import InputGroup from '@/components/ui/input/InputGroup.vue'
 const { status, disabled = false } = defineProps<{ status: ChatStatus; disabled?: boolean }>()
@@ -37,43 +38,14 @@ function handleSubmit(event: Event) {
   triggerResize()
 }
 
-interface SpeechRecognitionResultLike {
-  isFinal: boolean
-  0: { transcript: string }
-}
-interface SpeechRecognitionEventLike {
-  resultIndex: number
-  results: SpeechRecognitionResultLike[]
-}
-interface SpeechRecognitionLike {
-  lang: string
-  interimResults: boolean
-  continuous: boolean
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null
-  onerror: ((event: { error: string }) => void) | null
-  onend: (() => void) | null
-  start: () => void
-  stop: () => void
-  abort: () => void
-}
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike
+type VoiceState = 'idle' | 'recording' | 'transcribing' | 'polishing'
 
-interface WindowWithSpeechRecognition {
-  SpeechRecognition?: SpeechRecognitionCtor
-  webkitSpeechRecognition?: SpeechRecognitionCtor
-}
-
-function speechRecognitionCtor(): SpeechRecognitionCtor | null {
-  const w: WindowWithSpeechRecognition = window
-  const ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition
-  return typeof ctor === 'function' ? ctor : null
-}
-
-const voiceState = ref<'idle' | 'listening' | 'polishing'>('idle')
+const voiceState = ref<VoiceState>('idle')
 const voiceError = ref('')
-let recognition: SpeechRecognitionLike | null = null
+let mediaRecorder: MediaRecorder | null = null
+let mediaStream: MediaStream | null = null
+let recordedChunks: Blob[] = []
 let voiceBaseText = ''
-let voiceFinalText = ''
 
 const isCJK = (ch: string) => /[　-鿿豈-﫿]/.test(ch)
 
@@ -100,77 +72,110 @@ async function polishTranscript(text: string): Promise<string | null> {
   return polished || null
 }
 
-function handleVoiceError(error: string) {
-  if (error === 'aborted') return
-  voiceError.value = `${ai.value.voiceRecognitionError}: ${error}`
+function pickAudioMimeType(): string | undefined {
+  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
+    return undefined
+  }
+  for (const mime of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']) {
+    if (MediaRecorder.isTypeSupported(mime)) return mime
+  }
+  return undefined
 }
 
-function startVoiceInput() {
+function releaseVoiceCapture() {
+  mediaStream?.getTracks().forEach((track) => track.stop())
+  mediaStream = null
+  mediaRecorder = null
+}
+
+async function startVoiceInput() {
   voiceError.value = ''
-  const Ctor = speechRecognitionCtor()
-  if (!Ctor) {
+  const key = await resolveVoiceAsrKey()
+  if (!key) {
+    voiceError.value = ai.value.voiceNeedKey
+    return
+  }
+  if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
     voiceError.value = ai.value.voiceUnavailable
     return
   }
-  const rec = new Ctor()
-  rec.lang = 'zh-CN'
-  rec.interimResults = true
-  rec.continuous = true
-  voiceBaseText = input.value
-  voiceFinalText = ''
-  rec.onresult = (event) => {
-    let interim = ''
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const res = event.results[i]
-      if (res.isFinal) voiceFinalText += res[0].transcript
-      else interim += res[0].transcript
-    }
-    input.value = joinTranscript(voiceBaseText, voiceFinalText + interim)
-    triggerResize()
+  let stream: MediaStream
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  } catch (error) {
+    console.warn('voice microphone access failed', error)
+    voiceError.value = ai.value.voiceMicDenied
+    return
   }
-  rec.onerror = (event) => {
-    handleVoiceError(event.error)
-    recognition = null
+  const mimeType = pickAudioMimeType()
+  const recorder = mimeType
+    ? new MediaRecorder(stream, { mimeType })
+    : new MediaRecorder(stream)
+  recordedChunks = []
+  voiceBaseText = input.value
+  recorder.ondataavailable = (event) => {
+    if (event.data.size > 0) recordedChunks.push(event.data)
+  }
+  recorder.onerror = (event) => {
+    console.warn('voice recorder error', event)
+    voiceError.value = ai.value.voiceAsrFailed
+    recordedChunks = []
+    releaseVoiceCapture()
     voiceState.value = 'idle'
   }
-  rec.onend = () => {
-    if (voiceState.value === 'listening') void finishVoiceInput()
+  recorder.onstop = () => {
+    void finishVoiceInput()
   }
-  try {
-    rec.start()
-    recognition = rec
-    voiceState.value = 'listening'
-  } catch {
-    voiceError.value = ai.value.voiceUnavailable
-  }
+  mediaRecorder = recorder
+  mediaStream = stream
+  recorder.start()
+  voiceState.value = 'recording'
 }
 
 function stopVoiceInput() {
-  recognition?.stop()
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop()
 }
 
 async function finishVoiceInput() {
-  const spoken = voiceFinalText.trim()
-  recognition = null
-  if (!spoken) {
+  const chunks = recordedChunks
+  recordedChunks = []
+  const mimeType = mediaRecorder?.mimeType || 'audio/webm'
+  releaseVoiceCapture()
+  const blob = new Blob(chunks, { type: mimeType })
+  if (blob.size === 0) {
+    voiceState.value = 'idle'
+    return
+  }
+  voiceState.value = 'transcribing'
+  let transcript = ''
+  try {
+    transcript = await transcribeAudio(blob)
+  } catch (error) {
+    if (error instanceof VoiceAsrError && error.code === 'missing-key') {
+      voiceError.value = ai.value.voiceNeedKey
+    } else {
+      console.warn('voice transcription failed', error)
+      voiceError.value = ai.value.voiceAsrFailed
+    }
     voiceState.value = 'idle'
     return
   }
   voiceState.value = 'polishing'
   try {
-    const polished = await polishTranscript(spoken)
-    if (polished) input.value = joinTranscript(voiceBaseText, polished)
+    const polished = await polishTranscript(transcript)
+    input.value = joinTranscript(voiceBaseText, polished ?? transcript)
   } catch (error) {
-    // 模型修正失败时保留原始识别文本
+    // 模型润色失败时保留原始转写文本
     console.warn('voice transcript polish failed', error)
+    input.value = joinTranscript(voiceBaseText, transcript)
   }
   voiceState.value = 'idle'
   triggerResize()
 }
 
 function handleVoiceButton() {
-  if (voiceState.value === 'listening') stopVoiceInput()
-  else if (voiceState.value === 'idle') startVoiceInput()
+  if (voiceState.value === 'recording') stopVoiceInput()
+  else if (voiceState.value === 'idle') void startVoiceInput()
 }
 </script>
 <template>
@@ -183,7 +188,8 @@ function handleVoiceButton() {
         data-test-id="chat-voice-status"
       >
         <template v-if="voiceError">{{ voiceError }}</template>
-        <template v-else-if="voiceState === 'listening'">{{ ai.voiceListening }}</template>
+        <template v-else-if="voiceState === 'recording'">{{ ai.voiceListening }}</template>
+        <template v-else-if="voiceState === 'transcribing'">{{ ai.voiceTranscribing }}</template>
         <template v-else>{{ ai.voicePolishing }}</template>
       </div>
       <form @submit="handleSubmit" @paste.stop="emit('paste', $event)">
@@ -210,22 +216,22 @@ function handleVoiceButton() {
 
           <template #actions>
             <IconButton
-              :label="voiceState === 'listening' ? ai.stopVoiceInput : ai.voiceInput"
+              :label="voiceState === 'recording' ? ai.stopVoiceInput : ai.voiceInput"
               size="sm"
               data-test-id="chat-voice-button"
-              :disabled="isStreaming || voiceState === 'polishing'"
+              :disabled="isStreaming || voiceState === 'transcribing' || voiceState === 'polishing'"
               :class="
-                voiceState === 'listening'
+                voiceState === 'recording'
                   ? 'border border-red-500 text-red-500 hover:text-red-500'
                   : ''
               "
               @click="handleVoiceButton"
             >
               <icon-lucide-loader-circle
-                v-if="voiceState === 'polishing'"
+                v-if="voiceState === 'transcribing' || voiceState === 'polishing'"
                 class="size-3.5 animate-spin"
               />
-              <icon-lucide-square v-else-if="voiceState === 'listening'" class="size-3" />
+              <icon-lucide-square v-else-if="voiceState === 'recording'" class="size-3" />
               <icon-lucide-mic v-else class="size-3.5" />
             </IconButton>
             <IconButton

@@ -8,6 +8,7 @@ import { useAIChat } from '@/app/ai/chat/use'
 import ChatPanel from './ChatPanel.vue'
 import CodePanel from './CodePanel.vue'
 import DesignPanel from './DesignPanel.vue'
+import HtmlPagePanel from './HtmlPagePanel.vue'
 import ZoomDropdown from './editor/ZoomDropdown.vue'
 
 const { activeTab } = useAIChat()
@@ -45,6 +46,14 @@ const { panels } = useI18n()
           <icon-lucide-sparkles class="size-3" />
           {{ panels.ai }}
         </TabsTrigger>
+        <TabsTrigger
+          value="page"
+          data-test-id="properties-tab-page"
+          class="relative flex items-center gap-1 rounded px-2.5 py-1 text-[11px] text-muted hover:text-surface data-[state=active]:font-semibold data-[state=active]:text-surface after:absolute after:inset-x-2 after:-bottom-[9px] after:h-0.5 after:rounded-full after:bg-transparent data-[state=active]:after:bg-accent"
+        >
+          <icon-lucide-globe class="size-3" />
+          {{ panels.page }}
+        </TabsTrigger>
         <ZoomDropdown v-if="activeTab === 'design'" />
       </TabsList>
 
@@ -73,6 +82,15 @@ const { panels } = useI18n()
         :hidden="activeTab !== 'ai'"
       >
         <ChatPanel />
+      </TabsContent>
+
+      <TabsContent
+        value="page"
+        class="flex min-h-0 flex-1 flex-col"
+        :force-mount="true"
+        :hidden="activeTab !== 'page'"
+      >
+        <HtmlPagePanel />
       </TabsContent>
     </TabsRoot>
   </aside>

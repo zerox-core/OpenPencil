@@ -10,9 +10,15 @@ export type ReasoningDisplay = 'collapsed' | 'while-thinking' | 'expanded'
 
 export type CanvasRenderingMode = 'retained' | 'tiled'
 
+export interface VoiceAsrPreferences {
+  baseUrl: string
+  model: string
+}
+
 export interface AppPreferences {
   appearance: { animations: AnimationPreference }
   chat: { reasoningDisplay: ReasoningDisplay; maxAgentSteps: number }
+  voice: VoiceAsrPreferences
   version: 1
   recovery: {
     enabled: boolean
@@ -25,9 +31,13 @@ export interface AppPreferences {
   }
 }
 
+export const DEFAULT_VOICE_ASR_BASE_URL = 'https://api.siliconflow.cn/v1'
+export const DEFAULT_VOICE_ASR_MODEL = 'FunAudioLLM/SenseVoiceSmall'
+
 export const DEFAULT_APP_PREFERENCES: Readonly<AppPreferences> = {
   appearance: { animations: 'system' },
   chat: { reasoningDisplay: 'collapsed', maxAgentSteps: DEFAULT_AGENT_STEPS },
+  voice: { baseUrl: DEFAULT_VOICE_ASR_BASE_URL, model: DEFAULT_VOICE_ASR_MODEL },
   version: 1,
   recovery: { enabled: true },
   editing: {
@@ -42,6 +52,10 @@ function booleanOrDefault(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback
 }
 
+function stringOrDefault(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value : fallback
+}
+
 interface StoredSnappingPreferences {
   geometry?: unknown
   objects?: unknown
@@ -51,6 +65,7 @@ interface StoredSnappingPreferences {
 interface StoredAppPreferences {
   appearance?: { animations?: unknown }
   chat?: { reasoningDisplay?: unknown; maxAgentSteps?: unknown }
+  voice?: { baseUrl?: unknown; model?: unknown }
   recovery?: { enabled?: unknown }
   editing?: { snapping?: StoredSnappingPreferences }
   rendering?: { canvasMode?: unknown }
@@ -81,6 +96,10 @@ function normalizePreferences(value: unknown): AppPreferences {
   return {
     appearance: { animations: normalizeAnimationPreference(stored?.appearance?.animations) },
     chat: normalizeChatPreferences(stored?.chat),
+    voice: {
+      baseUrl: stringOrDefault(stored?.voice?.baseUrl, DEFAULT_VOICE_ASR_BASE_URL),
+      model: stringOrDefault(stored?.voice?.model, DEFAULT_VOICE_ASR_MODEL)
+    },
     version: 1,
     recovery: {
       enabled: booleanOrDefault(stored?.recovery?.enabled, DEFAULT_APP_PREFERENCES.recovery.enabled)

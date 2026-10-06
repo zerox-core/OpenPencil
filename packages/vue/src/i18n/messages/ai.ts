@@ -167,7 +167,32 @@ export const aiMessageDefaults = {
   voiceListening: 'Listening… click stop when finished.',
   voicePolishing: 'Polishing the transcript with the model…',
   voiceUnavailable: 'Speech recognition is unavailable in this environment.',
-  voiceRecognitionError: 'Speech recognition failed. Check the microphone permission and try again.'
+  voiceRecognitionError: 'Speech recognition failed. Check the microphone permission and try again.',
+  voiceTranscribing: 'Transcribing the recording…',
+  voiceNeedKey: 'Save a speech-to-text API key in Settings → AI → Voice input first.',
+  voiceMicDenied: 'Microphone access was denied. Allow the microphone and try again.',
+  voiceAsrFailed: 'Speech-to-text failed. Check the voice input settings and try again.',
+  voiceAsrSettings: 'Voice input (speech-to-text)',
+  voiceAsrSettingsHint:
+    'Uses an OpenAI-compatible /audio/transcriptions endpoint. Defaults to SiliconFlow SenseVoice.',
+  voiceAsrBaseUrl: 'ASR base URL',
+  voiceAsrModel: 'ASR model',
+  voiceAsrApiKey: 'ASR API key',
+  voiceAsrSaveKey: 'Save key',
+  voiceAsrKeyConfigured: 'API key saved.',
+  voiceAsrKeyNotConfigured: 'No API key saved yet.',
+  htmlPageNeedModel: 'Choose a direct-connection AI model in Settings before generating pages.',
+  htmlPageNoHtml: 'The model did not return HTML code. Try rephrasing your request.',
+  htmlPagePlaceholder: 'Describe the page you want, e.g. “a landing page for a coffee shop”…',
+  htmlPageModifyPlaceholder: 'Describe what to change on the current page…',
+  htmlPageGenerating: 'Generating the page…',
+  htmlPageFailed: 'Page generation failed. Check the model settings and try again.',
+  htmlPagePreview: 'Preview',
+  htmlPageCode: 'Code',
+  htmlPageExport: 'Export HTML',
+  htmlPageApply: 'Apply code',
+  htmlPageEmpty: 'Describe a page below and the AI will generate it here.',
+  htmlPageGenerate: 'Generate'
 } as const
 
 export const aiMessages = i18n('ai', aiMessageDefaults)
