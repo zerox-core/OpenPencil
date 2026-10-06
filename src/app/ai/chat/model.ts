@@ -21,8 +21,11 @@ export function resolveLanguageModelID(
   return config.modelID
 }
 
+const AI_REQUEST_TIMEOUT_MS = 300000
+
 function desktopFetch(): FetchFunction | undefined {
-  return isTauri() ? tauriFetch : undefined
+  if (!isTauri()) return undefined
+  return (input, init) => tauriFetch(input, init, undefined, AI_REQUEST_TIMEOUT_MS)
 }
 
 export function createLanguageModel(config: ModelConfig): LanguageModel {
