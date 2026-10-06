@@ -497,7 +497,7 @@ export function parsePenFile(json: string): SceneGraph {
 
   collectComponentIds(doc.children, componentIds)
 
-  const page = graph.addPage(doc.children[0]?.name ?? 'Page 1')
+  const page = graph.addPage(doc.children[0]?.name ?? '页面 1')
   for (const child of doc.children) {
     createSceneNode(child, page.id, graph, ctx, componentIds, penSources)
   }
@@ -511,7 +511,7 @@ export function parsePenFile(json: string): SceneGraph {
   fixTextWidths(graph)
 
   if (graph.getPages(true).length === 0) {
-    graph.addPage('Page 1')
+    graph.addPage('页面 1')
   }
 
   return graph

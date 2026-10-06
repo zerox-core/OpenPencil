@@ -127,7 +127,7 @@ export class SceneGraph {
     this.rootId = root.id
     this.nodes.set(root.id, root)
 
-    this.addPage('Page 1')
+    this.addPage('页面 1')
   }
   addPage(name: string): SceneNode {
     return this.createNode('CANVAS', this.rootId, { name, width: 0, height: 0 })

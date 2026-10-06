@@ -370,7 +370,7 @@ function importPages(
       const pid = parentMap.get(id)
       if (!pid || !changeMap.has(pid)) roots.push(id)
     }
-    const page = graph.getPages()[0] ?? graph.addPage('Page 1')
+    const page = graph.getPages()[0] ?? graph.addPage('页面 1')
     for (const rootId of roots) {
       createSceneNode(rootId, page.id)
     }
@@ -594,6 +594,6 @@ export function importNodeChanges(
     rememberLazyFigImportContext(graph, changeMap, guidToNodeId, blobs, activeRootIds)
 
   setVariableColorResolver(null)
-  if (graph.getPages(true).length === 0) graph.addPage('Page 1')
+  if (graph.getPages(true).length === 0) graph.addPage('页面 1')
   return graph
 }

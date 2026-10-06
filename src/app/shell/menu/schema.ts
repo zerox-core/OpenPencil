@@ -62,20 +62,20 @@ export interface AppMenuGroupSchema {
 
 export const APP_MENU_SCHEMA = [
   {
-    label: 'File',
+    label: '文件',
     paletteIcon: 'file',
     items: [
-      { id: 'new', label: 'New', shortcut: 'MOD+N' },
-      { id: 'open', label: 'Open…', shortcut: 'MOD+O' },
-      { id: 'open-recent', label: 'Open Recent', target: 'native' },
-      { id: 'open-storage-workspace', label: 'Open Storage Workspace…', handler: 'shell' },
+      { id: 'new', label: '新建', shortcut: 'MOD+N' },
+      { id: 'open', label: '打开…', shortcut: 'MOD+O' },
+      { id: 'open-recent', label: '最近打开', target: 'native' },
+      { id: 'open-storage-workspace', label: '打开存储工作区…', handler: 'shell' },
       { type: 'separator' },
-      { id: 'save', label: 'Save', shortcut: 'MOD+S' },
-      { id: 'save-as', label: 'Save As…', shortcut: 'MOD+SHIFT+S' },
+      { id: 'save', label: '保存', shortcut: 'MOD+S' },
+      { id: 'save-as', label: '另存为…', shortcut: 'MOD+SHIFT+S' },
       { type: 'separator' },
       {
         id: 'export-selection',
-        label: 'Export Selection',
+        label: '导出所选',
         palette: { icon: 'download' },
         shortcut: 'MOD+SHIFT+E',
         sub: [
@@ -102,118 +102,118 @@ export const APP_MENU_SCHEMA = [
         ]
       },
       { type: 'separator' },
-      { id: 'autosave', label: 'Autosave', checkbox: true },
-      { id: 'close', label: 'Close Tab', shortcut: 'MOD+W' }
+      { id: 'autosave', label: '自动保存', checkbox: true },
+      { id: 'close', label: '关闭标签页', shortcut: 'MOD+W' }
     ]
   },
   {
-    label: 'Edit',
+    label: '编辑',
     paletteIcon: 'pencil',
     items: [
       {
         id: 'edit.undo',
-        label: 'Undo',
+        label: '撤销',
         command: 'edit.undo'
       },
       {
         id: 'edit.redo',
-        label: 'Redo',
+        label: '重做',
         command: 'edit.redo'
       },
       { type: 'separator' },
-      { id: 'copy', label: 'Copy', shortcut: 'MOD+C' },
-      { id: 'cut', label: 'Cut', shortcut: 'MOD+X' },
-      { id: 'paste', label: 'Paste', shortcut: 'MOD+V' },
-      { id: 'paste-to-replace', label: 'Paste to replace', shortcut: 'MOD+SHIFT+R' },
+      { id: 'copy', label: '复制', shortcut: 'MOD+C' },
+      { id: 'cut', label: '剪切', shortcut: 'MOD+X' },
+      { id: 'paste', label: '粘贴', shortcut: 'MOD+V' },
+      { id: 'paste-to-replace', label: '粘贴并替换', shortcut: 'MOD+SHIFT+R' },
       {
         id: 'selection.duplicate',
-        label: 'Duplicate',
+        label: '创建副本',
         command: 'selection.duplicate'
       },
       {
         id: 'selection.delete',
-        label: 'Delete',
+        label: '删除',
         command: 'selection.delete'
       },
-      { id: 'selection.rename', label: 'Rename Selection…', shortcut: 'MOD+R' },
+      { id: 'selection.rename', label: '重命名所选…', shortcut: 'MOD+R' },
       { type: 'separator' },
       {
         id: 'selection.selectAll',
-        label: 'Select All',
+        label: '全选',
         command: 'selection.selectAll'
       },
       {
         id: 'selection.selectInverse',
-        label: 'Select Inverse',
+        label: '反选',
         command: 'selection.selectInverse'
       }
     ]
   },
   {
-    label: 'View',
+    label: '视图',
     paletteIcon: 'eye',
     items: [
       {
         id: 'view.zoom100',
-        label: 'Zoom to 100%',
+        label: '缩放到 100%',
         command: 'view.zoom100'
       },
       {
         id: 'view.zoomFit',
-        label: 'Zoom to Fit',
+        label: '缩放以适应',
         command: 'view.zoomFit'
       },
       {
         id: 'view.zoomSelection',
-        label: 'Zoom to Selection',
+        label: '缩放至所选',
         command: 'view.zoomSelection'
       },
-      { id: 'zoom-in', label: 'Zoom In', shortcut: 'MOD+=' },
-      { id: 'zoom-out', label: 'Zoom Out', shortcut: 'MOD+-' },
+      { id: 'zoom-in', label: '放大', shortcut: 'MOD+=' },
+      { id: 'zoom-out', label: '缩小', shortcut: 'MOD+-' },
       { type: 'separator' },
-      { id: 'view-split-right', label: 'Split Right' },
-      { id: 'view-split-down', label: 'Split Down' },
+      { id: 'view-split-right', label: '向右拆分' },
+      { id: 'view-split-down', label: '向下拆分' },
       { type: 'separator' },
-      { id: 'view-rulers', label: 'Rulers', checkbox: true },
-      { id: 'view-multiplayer-cursors', label: 'Multiplayer Cursors', checkbox: true },
+      { id: 'view-rulers', label: '标尺', checkbox: true },
+      { id: 'view-multiplayer-cursors', label: '多人光标', checkbox: true },
       { type: 'separator' },
       {
         id: 'theme',
-        label: 'Theme',
+        label: '主题',
         sub: [
-          { id: 'theme-light', label: 'Light', checkbox: true, handler: 'shell' },
-          { id: 'theme-dark', label: 'Dark', checkbox: true, handler: 'shell' },
-          { id: 'theme-auto', label: 'Auto', checkbox: true, handler: 'shell' }
+          { id: 'theme-light', label: '浅色', checkbox: true, handler: 'shell' },
+          { id: 'theme-dark', label: '深色', checkbox: true, handler: 'shell' },
+          { id: 'theme-auto', label: '跟随系统', checkbox: true, handler: 'shell' }
         ]
       },
-      { id: 'language', label: 'Language', target: 'browser' },
+      { id: 'language', label: '语言', target: 'browser' },
       { type: 'separator' },
       {
         id: 'preferences',
-        label: 'Preferences',
+        label: '偏好设置',
         sub: [
           {
             id: 'snap-geometry',
-            label: 'Snap to Geometry',
+            label: '吸附到几何',
             checkbox: true,
             handler: 'shell'
           },
           {
             id: 'snap-objects',
-            label: 'Snap to Objects',
+            label: '吸附到对象',
             checkbox: true,
             handler: 'shell'
           },
           {
             id: 'snap-pixel-grid',
-            label: 'Snap to Pixel Grid',
+            label: '吸附到像素网格',
             checkbox: true,
             handler: 'shell'
           },
           { type: 'separator' },
           {
             id: 'settings',
-            label: 'Settings…',
+            label: '设置…',
             shortcut: 'MOD+,',
             accelerator: 'CmdOrCtrl+,',
             handler: 'shell'
@@ -221,189 +221,189 @@ export const APP_MENU_SCHEMA = [
         ]
       },
       { type: 'separator' },
-      { id: 'toggle-ui', label: 'Toggle UI', shortcut: 'MOD+\\' },
+      { id: 'toggle-ui', label: '显示/隐藏界面', shortcut: 'MOD+\\' },
       { type: 'separator' },
-      { id: 'profiler', label: 'Profiler', checkbox: true, target: 'browser' },
+      { id: 'profiler', label: '性能分析器', checkbox: true, target: 'browser' },
       {
         id: 'dev-tools',
-        label: 'Developer Tools',
+        label: '开发者工具',
         accelerator: 'CmdOrCtrl+Alt+I',
         target: 'native'
       }
     ]
   },
   {
-    label: 'Object',
+    label: '对象',
     paletteIcon: 'layers',
     items: [
       {
         id: 'selection.group',
-        label: 'Group Selection',
+        label: '编组所选',
         command: 'selection.group'
       },
       {
         id: 'selection.frameSelection',
-        label: 'Frame Selection',
+        label: '为所选建画框',
         command: 'selection.frameSelection'
       },
       {
         id: 'selection.ungroup',
-        label: 'Ungroup Selection',
+        label: '取消编组',
         command: 'selection.ungroup'
       },
       { type: 'separator' },
       {
         id: 'selection.toggleMask',
-        label: 'Use as Mask',
+        label: '用作蒙版',
         command: 'selection.toggleMask'
       },
       {
         id: 'selection.toggleVisibility',
-        label: 'Show/Hide',
+        label: '显示/隐藏',
         command: 'selection.toggleVisibility'
       },
       {
         id: 'selection.toggleLock',
-        label: 'Lock/Unlock',
+        label: '锁定/解锁',
         command: 'selection.toggleLock'
       },
       { type: 'separator' },
       {
         id: 'selection.flipHorizontal',
-        label: 'Flip Horizontal',
+        label: '水平翻转',
         command: 'selection.flipHorizontal'
       },
       {
         id: 'selection.flipVertical',
-        label: 'Flip Vertical',
+        label: '垂直翻转',
         command: 'selection.flipVertical'
       },
       { type: 'separator' },
       {
         id: 'selection.booleanUnion',
-        label: 'Union selection',
+        label: '联集',
         command: 'selection.booleanUnion'
       },
       {
         id: 'selection.booleanSubtract',
-        label: 'Subtract selection',
+        label: '减去顶层',
         command: 'selection.booleanSubtract'
       },
       {
         id: 'selection.booleanIntersect',
-        label: 'Intersect selection',
+        label: '交集',
         command: 'selection.booleanIntersect'
       },
       {
         id: 'selection.booleanExclude',
-        label: 'Exclude selection',
+        label: '差集',
         command: 'selection.booleanExclude'
       },
       {
         id: 'selection.flatten',
-        label: 'Flatten',
+        label: '拼合',
         command: 'selection.flatten'
       },
       {
         id: 'selection.outlineText',
-        label: 'Outline text',
+        label: '文字转轮廓',
         command: 'selection.outlineText'
       },
       {
         id: 'selection.outlineStroke',
-        label: 'Outline stroke',
+        label: '描边转轮廓',
         command: 'selection.outlineStroke'
       },
       { type: 'separator' },
       {
         id: 'selection.createComponent',
-        label: 'Create Component',
+        label: '创建组件',
         command: 'selection.createComponent'
       },
       {
         id: 'selection.createComponentSet',
-        label: 'Create Component Set',
+        label: '创建组件集',
         command: 'selection.createComponentSet'
       },
       {
         id: 'selection.createInstance',
-        label: 'Create Instance',
+        label: '创建实例',
         command: 'selection.createInstance'
       },
       {
         id: 'selection.goToMainComponent',
-        label: 'Go to Main Component',
+        label: '转到主组件',
         command: 'selection.goToMainComponent'
       },
       {
         id: 'selection.detachInstance',
-        label: 'Detach Instance',
+        label: '分离实例',
         command: 'selection.detachInstance'
       },
       { type: 'separator' },
       {
         id: 'selection.moveToPage',
-        label: 'Move to Page',
+        label: '移动到页面',
         command: 'selection.moveToPage',
         target: 'browser'
       },
       {
         id: 'selection.bringForward',
-        label: 'Bring Forward',
+        label: '上移一层',
         command: 'selection.bringForward'
       },
       {
         id: 'selection.bringToFront',
-        label: 'Bring to Front',
+        label: '置于顶层',
         command: 'selection.bringToFront'
       },
       {
         id: 'selection.sendBackward',
-        label: 'Send Backward',
+        label: '下移一层',
         command: 'selection.sendBackward'
       },
       {
         id: 'selection.sendToBack',
-        label: 'Send to Back',
+        label: '置于底层',
         command: 'selection.sendToBack'
       }
     ]
   },
   {
-    label: 'Text',
+    label: '文本',
     paletteIcon: 'type',
     items: [
-      { id: 'text.bold', label: 'Bold', shortcut: 'MOD+B' },
-      { id: 'text.italic', label: 'Italic', shortcut: 'MOD+I' },
-      { id: 'text.underline', label: 'Underline', shortcut: 'MOD+U' }
+      { id: 'text.bold', label: '加粗', shortcut: 'MOD+B' },
+      { id: 'text.italic', label: '斜体', shortcut: 'MOD+I' },
+      { id: 'text.underline', label: '下划线', shortcut: 'MOD+U' }
     ]
   },
   {
-    label: 'Arrange',
+    label: '排列',
     paletteIcon: 'layers',
     items: [
       {
         id: 'selection.wrapInAutoLayout',
-        label: 'Wrap in Auto Layout',
+        label: '包裹为自动布局',
         command: 'selection.wrapInAutoLayout'
       },
       { type: 'separator' },
-      { id: 'arrange.align-left', label: 'Align Left', shortcut: 'ALT+A' },
-      { id: 'arrange.align-center', label: 'Align Center', shortcut: 'ALT+H' },
-      { id: 'arrange.align-right', label: 'Align Right', shortcut: 'ALT+D' },
+      { id: 'arrange.align-left', label: '左对齐', shortcut: 'ALT+A' },
+      { id: 'arrange.align-center', label: '水平居中', shortcut: 'ALT+H' },
+      { id: 'arrange.align-right', label: '右对齐', shortcut: 'ALT+D' },
       { type: 'separator' },
-      { id: 'arrange.align-top', label: 'Align Top', shortcut: 'ALT+W' },
-      { id: 'arrange.align-middle', label: 'Align Middle', shortcut: 'ALT+V' },
-      { id: 'arrange.align-bottom', label: 'Align Bottom', shortcut: 'ALT+S' },
+      { id: 'arrange.align-top', label: '顶对齐', shortcut: 'ALT+W' },
+      { id: 'arrange.align-middle', label: '垂直居中', shortcut: 'ALT+V' },
+      { id: 'arrange.align-bottom', label: '底对齐', shortcut: 'ALT+S' },
       { type: 'separator' },
       {
         id: 'selection.distributeHorizontal',
-        label: 'Distribute Horizontal Spacing',
+        label: '水平等间距分布',
         command: 'selection.distributeHorizontal'
       },
       {
         id: 'selection.distributeVertical',
-        label: 'Distribute Vertical Spacing',
+        label: '垂直等间距分布',
         command: 'selection.distributeVertical'
       }
     ]
@@ -417,7 +417,7 @@ export const APP_MENU_SCHEMA = [
  * sit between them. Only the labels and accelerators are shared here.
  */
 export const APP_MENU_APP_ITEMS = [
-  { id: 'about', label: 'About OpenPencil' },
-  { id: 'check-updates', label: 'Check for Updates…' },
-  { id: 'quit', label: 'Quit OpenPencil', shortcut: 'MOD+Q' }
+  { id: 'about', label: '关于 OpenPencil' },
+  { id: 'check-updates', label: '检查更新…' },
+  { id: 'quit', label: '退出 OpenPencil', shortcut: 'MOD+Q' }
 ] satisfies AppMenuActionItem[]

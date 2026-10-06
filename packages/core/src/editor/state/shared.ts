@@ -6,7 +6,7 @@ export function createDefaultEditorSharedState(): EditorSharedState {
     activeTool: 'SELECT',
     snappingPreferences: { ...DEFAULT_SNAPPING_PREFERENCES },
     remoteCursors: [],
-    documentName: 'Untitled',
+    documentName: '未命名',
     rulerTheme: undefined,
     sceneVersion: 0
   }

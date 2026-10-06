@@ -47,7 +47,7 @@ export function createDocumentWriter({
         await persistStorageCanvasLocally({
           providerId: storage.providerId,
           canvasId: storage.documentId,
-          name: state.documentName || 'Untitled',
+          name: state.documentName || '未命名',
           figBytes: data
         })
         return await finishWrite(version)

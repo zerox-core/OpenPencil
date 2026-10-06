@@ -200,7 +200,7 @@ function reusableTabStore(): { store: EditorStore; created: boolean } {
     return { store: current.store, created: false }
   }
   const isUntouched =
-    current?.store.state.documentName === 'Untitled' && !current.store.undo.canUndo
+    current?.store.state.documentName === '未命名' && !current.store.undo.canUndo
   if (isUntouched) {
     leaveHome(current.id)
     return { store: current.store, created: false }

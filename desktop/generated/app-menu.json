@@ -1,12 +1,12 @@
 {
   "about": {
-    "label": "About OpenPencil"
+    "label": "关于 OpenPencil"
   },
   "check-updates": {
-    "label": "Check for Updates…"
+    "label": "检查更新…"
   },
   "quit": {
-    "label": "Quit OpenPencil",
+    "label": "退出 OpenPencil",
     "accelerator": "CmdOrCtrl+Q"
   }
 }

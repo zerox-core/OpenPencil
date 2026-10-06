@@ -100,7 +100,7 @@ export function createSaveActions({
       return wrote
     }
 
-    const filename = prompt(filesMessages.get().saveAsPrompt, getDownloadName() ?? 'Untitled.fig')
+    const filename = prompt(filesMessages.get().saveAsPrompt, getDownloadName() ?? '未命名.fig')
     if (!filename) return false
     setStorageBinding(null)
     setDownloadName(filename)

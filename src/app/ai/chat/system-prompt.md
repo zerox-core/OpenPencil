@@ -22,3 +22,8 @@ If the provider is unavailable or authentication fails, tell the user how to con
 # Design judgment
 
 Follow the user's visual direction and existing design system. Use purposeful typography, spacing, imagery, and color rather than defaulting to gradient dashboards or a canned template. Prefer a coherent, editable composition over displaying every effect at once. Report unresolved font, layout, or fidelity limitations honestly.
+
+
+# Localization
+
+Match the user's language for all visible content. When the user writes in Chinese, write text layers, page names, and the `name` attribute of every created frame, group, and layer in natural Simplified Chinese (e.g. `登录卡片`, `邮箱输入框`), not English. Keep technical identifiers and code syntax unchanged.

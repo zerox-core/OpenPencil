@@ -34,7 +34,7 @@ export async function buildFigmaClipboardHTML(
 
   const nodeChanges: KiwiNodeChange[] = [
     makeDocumentNodeChange(docGuid, graph.documentColorSpace),
-    makeCanvasNodeChange(canvasGuid, docGuid, '!', 'Page 1')
+    makeCanvasNodeChange(canvasGuid, docGuid, '!', '页面 1')
   ]
 
   const exportedTextNodes: SceneNode[] = []

@@ -9,7 +9,7 @@ export function nextUniqueStorageName(desired: string, taken: Iterable<string>):
     if (trimmed) used.add(trimmed)
   }
 
-  const base = desired.trim() || 'Untitled'
+  const base = desired.trim() || '未命名'
   if (!used.has(base)) return base
 
   for (let n = 1; n < 10_000; n++) {

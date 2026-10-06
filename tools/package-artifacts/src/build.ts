@@ -24,7 +24,7 @@ export async function buildPublicPackages(
       args: ['run', 'build'],
       cwd: join(root, pkg.directory),
       output: options.output ?? 'inherit',
-      timeoutMs: options.timeoutMs ?? 180_000
+      timeoutMs: options.timeoutMs ?? 1_200_000
     })
   }
   return packages

@@ -161,7 +161,13 @@ export const aiMessageDefaults = {
   openProviderSettingsAction: 'Open settings',
   visionModelUnavailable: 'Choose a Vision model in Settings before attaching images.',
   completions: 'Completions',
-  responses: 'Responses'
+  responses: 'Responses',
+  voiceInput: 'Voice input',
+  stopVoiceInput: 'Stop recording',
+  voiceListening: 'Listening… click stop when finished.',
+  voicePolishing: 'Polishing the transcript with the model…',
+  voiceUnavailable: 'Speech recognition is unavailable in this environment.',
+  voiceRecognitionError: 'Speech recognition failed. Check the microphone permission and try again.'
 } as const
 
 export const aiMessages = i18n('ai', aiMessageDefaults)
