@@ -58,10 +58,15 @@ interface SpeechRecognitionLike {
 }
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike
 
+interface WindowWithSpeechRecognition {
+  SpeechRecognition?: SpeechRecognitionCtor
+  webkitSpeechRecognition?: SpeechRecognitionCtor
+}
+
 function speechRecognitionCtor(): SpeechRecognitionCtor | null {
-  const w = window as unknown as Record<string, unknown>
+  const w: WindowWithSpeechRecognition = window
   const ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition
-  return typeof ctor === 'function' ? (ctor as SpeechRecognitionCtor) : null
+  return typeof ctor === 'function' ? ctor : null
 }
 
 const voiceState = ref<'idle' | 'listening' | 'polishing'>('idle')
@@ -155,8 +160,9 @@ async function finishVoiceInput() {
   try {
     const polished = await polishTranscript(spoken)
     if (polished) input.value = joinTranscript(voiceBaseText, polished)
-  } catch {
+  } catch (error) {
     // 模型修正失败时保留原始识别文本
+    console.warn('voice transcript polish failed', error)
   }
   voiceState.value = 'idle'
   triggerResize()
