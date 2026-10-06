@@ -148,5 +148,15 @@
   "reasoningWhileThinking": "Rozwijaj podczas rozumowania",
   "reasoningExpanded": "Domyślnie rozwinięte",
   "jumpToLatest": "Przejdź do najnowszej wiadomości",
-  "maxAgentStepsCustom": "Własna wartość…"
+  "maxAgentStepsCustom": "Własna wartość…",
+  "mockPageAddDesign": "Strona projektu",
+  "mockPageAddMock": "Strona mock",
+  "mockPageEmptyTitle": "Pusty canvas mock",
+  "mockPageEmptyHint": "Opisz w czacie po lewej stronę internetową lub mobilną, a AI wygeneruje ją na tym canvasie.",
+  "mockPageDownload": "Pobierz HTML",
+  "mockPageSizeDesktop": "Komputer",
+  "mockPageSizeTablet": "Tablet",
+  "mockPageSizePhone": "Telefon",
+  "mockPageAssistantDone": "Gotowe — strona po prawej została zaktualizowana.",
+  "mockPageCodeReadonly": "Kod jest tylko do odczytu. Poproś AI o zmiany na czacie."
 }

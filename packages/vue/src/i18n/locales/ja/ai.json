@@ -148,5 +148,15 @@
   "reasoningWhileThinking": "思考中に展開",
   "reasoningExpanded": "既定で展開",
   "jumpToLatest": "最新へ移動",
-  "maxAgentStepsCustom": "カスタム…"
+  "maxAgentStepsCustom": "カスタム…",
+  "mockPageAddDesign": "デザインページ",
+  "mockPageAddMock": "モックページ",
+  "mockPageEmptyTitle": "空のモックキャンバス",
+  "mockPageEmptyHint": "左のチャットで作成したい Web ページやモバイルページを説明すると、AI がこのキャンバスに生成します。",
+  "mockPageDownload": "HTML をダウンロード",
+  "mockPageSizeDesktop": "デスクトップ",
+  "mockPageSizeTablet": "タブレット",
+  "mockPageSizePhone": "スマートフォン",
+  "mockPageAssistantDone": "完了 — 右側のページが更新されました。",
+  "mockPageCodeReadonly": "コードは読み取り専用です。変更はチャットで AI に依頼してください。"
 }

@@ -193,7 +193,18 @@ export const aiMessageDefaults = {
   htmlPageApply: 'Apply code',
   htmlPageEmpty: 'Describe a page below and the AI will generate it here.',
   htmlPageCanvasHint: 'This is the web canvas — the AI generates standalone HTML pages here, separate from the white design canvas.',
-  htmlPageGenerate: 'Generate'
+  htmlPageGenerate: 'Generate',
+  mockPageAddDesign: 'Design page',
+  mockPageAddMock: 'Mock page',
+  mockPageEmptyTitle: 'Blank mock canvas',
+  mockPageEmptyHint:
+    'Describe a web or mobile page in the chat on the left and the AI will generate it onto this canvas.',
+  mockPageDownload: 'Download HTML',
+  mockPageSizeDesktop: 'Desktop',
+  mockPageSizeTablet: 'Tablet',
+  mockPageSizePhone: 'Phone',
+  mockPageAssistantDone: 'Done — the page on the right has been updated.',
+  mockPageCodeReadonly: 'Code is read-only. Ask the AI in the chat to make changes.'
 } as const
 
 export const aiMessages = i18n('ai', aiMessageDefaults)

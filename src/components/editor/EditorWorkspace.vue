@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { SplitterGroup, SplitterPanel, SplitterResizeHandle } from 'reka-ui'
 import { tv } from 'tailwind-variants'
+import { computed } from 'vue'
 
 import { formatShortcut, useI18n, useViewportKind } from '@open-pencil/vue'
 
 import { useEditorStore } from '@/app/editor/active-store'
+import { isMockPage } from '@/app/mock/pages'
 import { appRuntimeConfig } from '@/app/runtime/config'
 import { loadEditorLayout, saveEditorLayout } from '@/app/shell/layout-storage'
 import { appMenuShortcut } from '@/app/shell/menu/shortcut'
@@ -17,6 +19,7 @@ import EditorCanvas from '@/components/EditorCanvas.vue'
 import LayersPanel from '@/components/LayersPanel.vue'
 import MobileDrawer from '@/components/MobileDrawer.vue'
 import MobileHud from '@/components/MobileHud/MobileHud.vue'
+import MockPageWorkspace from '@/components/mock/MockPageWorkspace.vue'
 import PropertiesPanel from '@/components/PropertiesPanel.vue'
 import Toolbar from '@/components/Toolbar/Toolbar.vue'
 import IconButton from '@/components/ui/button/IconButton.vue'
@@ -28,12 +31,14 @@ const { editor } = useI18n()
 const { isMobile } = useViewportKind()
 const initialEditorLayout = loadEditorLayout()
 const horizontalSplitterStyles = tv(splitterTheme)({ direction: 'horizontal' })
+
+const mockMode = computed(() => isMockPage(store.state.currentPageId))
 </script>
 
 <template>
   <SplitterGroup
     v-if="!isMobile && showChrome && store.state.showUI"
-    :key="activeTab?.id"
+    :key="(activeTab?.id ?? '') + ':' + (mockMode ? 'mock' : 'design')"
     direction="horizontal"
     class="flex-1 overflow-hidden"
     @layout="saveEditorLayout"
@@ -53,27 +58,35 @@ const horizontalSplitterStyles = tv(splitterTheme)({ direction: 'horizontal' })
     >
       <div :class="horizontalSplitterStyles.divider()" />
     </SplitterResizeHandle>
-    <SplitterPanel id="canvas" :default-size="initialEditorLayout[1]" :min-size="30" class="flex">
-      <div class="relative flex min-w-0 flex-1">
+    <SplitterPanel
+      id="canvas"
+      :default-size="mockMode ? undefined : initialEditorLayout[1]"
+      :min-size="30"
+      class="flex"
+    >
+      <MockPageWorkspace v-if="mockMode" />
+      <div v-else class="relative flex min-w-0 flex-1">
         <CanvasSplitRoot />
         <Toolbar />
       </div>
     </SplitterPanel>
-    <SplitterResizeHandle :class="horizontalSplitterStyles.handle()">
-      <div :class="horizontalSplitterStyles.divider()" />
-    </SplitterResizeHandle>
-    <SplitterPanel
-      id="properties"
-      :default-size="initialEditorLayout[2]"
-      :min-size="10"
-      :max-size="30"
-      class="flex flex-col"
-    >
-      <div class="flex shrink-0 items-center justify-between border-b border-border px-1.5 py-1.5">
-        <CollabPanel />
-      </div>
-      <PropertiesPanel />
-    </SplitterPanel>
+    <template v-if="!mockMode">
+      <SplitterResizeHandle :class="horizontalSplitterStyles.handle()">
+        <div :class="horizontalSplitterStyles.divider()" />
+      </SplitterResizeHandle>
+      <SplitterPanel
+        id="properties"
+        :default-size="initialEditorLayout[2]"
+        :min-size="10"
+        :max-size="30"
+        class="flex flex-col"
+      >
+        <div class="flex shrink-0 items-center justify-between border-b border-border px-1.5 py-1.5">
+          <CollabPanel />
+        </div>
+        <PropertiesPanel />
+      </SplitterPanel>
+    </template>
   </SplitterGroup>
 
   <div

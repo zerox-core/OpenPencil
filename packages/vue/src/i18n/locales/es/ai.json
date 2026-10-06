@@ -148,5 +148,15 @@
   "reasoningWhileThinking": "Expandir al razonar",
   "reasoningExpanded": "Expandido por defecto",
   "jumpToLatest": "Ir al último mensaje",
-  "maxAgentStepsCustom": "Personalizado…"
+  "maxAgentStepsCustom": "Personalizado…",
+  "mockPageAddDesign": "Página de diseño",
+  "mockPageAddMock": "Página mock",
+  "mockPageEmptyTitle": "Lienzo mock en blanco",
+  "mockPageEmptyHint": "Describe en el chat de la izquierda la página web o móvil que quieres y la IA la generará en este lienzo.",
+  "mockPageDownload": "Descargar HTML",
+  "mockPageSizeDesktop": "Escritorio",
+  "mockPageSizeTablet": "Tableta",
+  "mockPageSizePhone": "Teléfono",
+  "mockPageAssistantDone": "Listo: la página de la derecha se ha actualizado.",
+  "mockPageCodeReadonly": "El código es de solo lectura. Pide los cambios a la IA en el chat."
 }

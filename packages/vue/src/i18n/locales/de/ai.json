@@ -148,5 +148,15 @@
   "reasoningWhileThinking": "Beim Nachdenken ausklappen",
   "reasoningExpanded": "Standardmäßig ausgeklappt",
   "jumpToLatest": "Zum neuesten Beitrag",
-  "maxAgentStepsCustom": "Eigener Wert…"
+  "maxAgentStepsCustom": "Eigener Wert…",
+  "mockPageAddDesign": "Design-Seite",
+  "mockPageAddMock": "Mock-Seite",
+  "mockPageEmptyTitle": "Leere Mock-Canvas",
+  "mockPageEmptyHint": "Beschreibe im Chat links die gewünschte Web- oder Mobilseite – die KI generiert sie auf dieser Canvas.",
+  "mockPageDownload": "HTML herunterladen",
+  "mockPageSizeDesktop": "Desktop",
+  "mockPageSizeTablet": "Tablet",
+  "mockPageSizePhone": "Smartphone",
+  "mockPageAssistantDone": "Fertig – die Seite rechts wurde aktualisiert.",
+  "mockPageCodeReadonly": "Der Code ist schreibgeschützt. Bitte die KI im Chat um Änderungen."
 }

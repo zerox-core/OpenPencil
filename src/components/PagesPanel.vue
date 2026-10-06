@@ -5,7 +5,12 @@ import {
   ContextMenuItem,
   ContextMenuPortal,
   ContextMenuRoot,
-  ContextMenuTrigger
+  ContextMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuPortal,
+  DropdownMenuRoot,
+  DropdownMenuTrigger
 } from 'reka-ui'
 import { tv } from 'tailwind-variants'
 import { ref, watch, type ComponentPublicInstance } from 'vue'
@@ -13,6 +18,8 @@ import { ref, watch, type ComponentPublicInstance } from 'vue'
 import type { SceneNode } from '@open-pencil/scene-graph'
 import { PageListRoot, useFlatReorderDrag, useI18n, useInlineRename } from '@open-pencil/vue'
 
+import { useEditorStore } from '@/app/editor/active-store'
+import { ensureMockPage, isMockPage } from '@/app/mock/pages'
 import IconButton from '@/components/ui/button/IconButton.vue'
 import { useMenuUI } from '@/components/ui/menu/menu'
 import pageListTheme from '@/theme/page-list'
@@ -27,13 +34,14 @@ interface PageActions {
 
 const pageInput = templateRef<HTMLInputElement>('pageInput')
 const rename = useInlineRename((id, name) => pageActions.value?.rename(id, name))
-const { panels, pages: pageMessages } = useI18n()
+const { ai, panels, pages: pageMessages } = useI18n()
 const menuCls = useMenuUI({
   content: 'min-w-36 shadow-[0_8px_30px_rgb(0_0_0/0.4)]',
   item: 'justify-start gap-2'
 })
 const pageListStyles = tv(pageListTheme)
 const baseStyles = pageListStyles()
+const store = useEditorStore()
 
 const pageActions = ref<Pick<PageActions, 'rename'> | null>(null)
 const currentPages = ref<readonly PageItem[]>([])
@@ -54,6 +62,11 @@ watch(pageInput, (input) => {
 function startRename(pg: PageItem, renamePage: (pageId: string, name: string) => void) {
   setPageActions(renamePage)
   rename.start(pg.id, pg.name)
+}
+
+function addMockPage() {
+  const id = store.addPage()
+  if (id) ensureMockPage(id)
 }
 
 function pageDropPosition(pg: PageItem): 'before' | 'after' | undefined {
@@ -88,9 +101,33 @@ function setupPageRowRef(
     <div data-test-id="pages-panel" :class="baseStyles.panel()">
       <div :class="baseStyles.header()">
         <span data-test-id="pages-header" :class="baseStyles.title()">{{ panels.pages }}</span>
-        <IconButton :label="panels.addPage" data-test-id="pages-add" @click="actions.add()">
-          <icon-lucide-plus class="size-3.5" />
-        </IconButton>
+        <DropdownMenuRoot :modal="false">
+          <DropdownMenuTrigger as-child>
+            <IconButton :label="panels.addPage" data-test-id="pages-add">
+              <icon-lucide-plus class="size-3.5" />
+            </IconButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuContent :class="menuCls.content" :side-offset="2" align="end">
+              <DropdownMenuItem
+                data-test-id="pages-add-design"
+                :class="menuCls.item"
+                @select="actions.add()"
+              >
+                <icon-lucide-file :class="menuCls.icon" />
+                <span>{{ ai.mockPageAddDesign }}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                data-test-id="pages-add-mock"
+                :class="menuCls.item"
+                @select="addMockPage()"
+              >
+                <icon-lucide-globe :class="menuCls.icon" />
+                <span>{{ ai.mockPageAddMock }}</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenuPortal>
+        </DropdownMenuRoot>
       </div>
       <div :class="baseStyles.body()">
         <div data-test-id="pages-scroll" :class="baseStyles.viewport()">
@@ -114,7 +151,11 @@ function setupPageRowRef(
                   v-if="rename.editingId.value === pg.id"
                   :class="pageStyles(pg, currentPageId).renameRow()"
                 >
-                  <icon-lucide-file :class="pageStyles(pg, currentPageId).icon()" />
+                  <icon-lucide-globe
+                    v-if="isMockPage(pg.id)"
+                    :class="pageStyles(pg, currentPageId).icon()"
+                  />
+                  <icon-lucide-file v-else :class="pageStyles(pg, currentPageId).icon()" />
                   <input
                     ref="pageInput"
                     data-test-id="pages-item-input"
@@ -139,7 +180,11 @@ function setupPageRowRef(
                   @click="actions.switch(pg.id)"
                   @dblclick="startRename(pg, actions.rename)"
                 >
-                  <icon-lucide-file :class="pageStyles(pg, currentPageId).icon()" />
+                  <icon-lucide-globe
+                    v-if="isMockPage(pg.id)"
+                    :class="pageStyles(pg, currentPageId).icon()"
+                  />
+                  <icon-lucide-file v-else :class="pageStyles(pg, currentPageId).icon()" />
                   <span :class="pageStyles(pg, currentPageId).label()">{{ pg.name }}</span>
                 </button>
                 <div

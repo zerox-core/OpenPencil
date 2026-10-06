@@ -179,5 +179,15 @@
   "htmlPageApply": "应用代码",
   "htmlPageEmpty": "在下方描述一个页面，AI 会在这里生成它。",
   "htmlPageCanvasHint": "这里是网页画布：AI 在这里生成独立的 HTML 页面，与左侧白色设计画布互不影响。",
-  "htmlPageGenerate": "生成"
+  "htmlPageGenerate": "生成",
+  "mockPageAddDesign": "设计页面",
+  "mockPageAddMock": "Mock 页面",
+  "mockPageEmptyTitle": "空白 Mock 画布",
+  "mockPageEmptyHint": "在左侧对话里描述想要的网页或手机页面，AI 会把它生成到这块画布上。",
+  "mockPageDownload": "下载 HTML",
+  "mockPageSizeDesktop": "桌面",
+  "mockPageSizeTablet": "平板",
+  "mockPageSizePhone": "手机",
+  "mockPageAssistantDone": "已完成——右侧页面已更新。",
+  "mockPageCodeReadonly": "代码为只读，需要修改请在对话中告诉 AI。"
 }

@@ -148,5 +148,15 @@
   "reasoningWhileThinking": "Разворачивать во время размышлений",
   "reasoningExpanded": "Развёрнуто по умолчанию",
   "jumpToLatest": "К последнему сообщению",
-  "maxAgentStepsCustom": "Своё значение…"
+  "maxAgentStepsCustom": "Своё значение…",
+  "mockPageAddDesign": "Страница дизайна",
+  "mockPageAddMock": "Мок-страница",
+  "mockPageEmptyTitle": "Пустой мок-холст",
+  "mockPageEmptyHint": "Опишите в чате слева нужную веб- или мобильную страницу, и ИИ сгенерирует её на этом холсте.",
+  "mockPageDownload": "Скачать HTML",
+  "mockPageSizeDesktop": "Десктоп",
+  "mockPageSizeTablet": "Планшет",
+  "mockPageSizePhone": "Телефон",
+  "mockPageAssistantDone": "Готово — страница справа обновлена.",
+  "mockPageCodeReadonly": "Код доступен только для чтения. Попросите ИИ внести изменения в чате."
 }
