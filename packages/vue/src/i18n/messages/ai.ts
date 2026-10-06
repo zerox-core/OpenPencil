@@ -192,6 +192,7 @@ export const aiMessageDefaults = {
   htmlPageExport: 'Export HTML',
   htmlPageApply: 'Apply code',
   htmlPageEmpty: 'Describe a page below and the AI will generate it here.',
+  htmlPageCanvasHint: 'This is the web canvas — the AI generates standalone HTML pages here, separate from the white design canvas.',
   htmlPageGenerate: 'Generate'
 } as const
 

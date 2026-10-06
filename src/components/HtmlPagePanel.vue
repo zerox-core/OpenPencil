@@ -5,9 +5,11 @@ import { computed, ref } from 'vue'
 import { useI18n } from '@open-pencil/vue'
 
 import { createAIModelRuntime } from '@/app/ai/models'
+import { useVoiceInput } from '@/app/ai/voice/use-voice-input'
 import { saveExportedFile } from '@/app/document/export/files'
 import { downloadBlob } from '@/app/document/io/browser'
 import AppButton from '@/components/ui/button/AppButton.vue'
+import IconButton from '@/components/ui/button/IconButton.vue'
 
 const { ai } = useI18n()
 
@@ -18,6 +20,8 @@ const view = ref<'preview' | 'code'>('preview')
 const generating = ref(false)
 const exporting = ref(false)
 const errorMsg = ref('')
+
+const { voiceState, voiceError, handleVoiceButton } = useVoiceInput(prompt)
 
 const hasPage = computed(() => html.value.length > 0)
 
@@ -146,19 +150,48 @@ function handlePromptKeydown(event: KeyboardEvent) {
     </div>
 
     <div class="min-h-0 flex-1">
-      <iframe
-        v-if="view === 'preview' && hasPage"
-        sandbox="allow-scripts"
-        :srcdoc="html"
-        title="html-page-preview"
-        class="size-full border-0 bg-white"
-        data-test-id="html-page-preview-frame"
-      />
       <div
-        v-else-if="view === 'preview'"
-        class="flex size-full items-center justify-center p-6 text-center text-xs text-muted"
+        v-if="view === 'preview'"
+        class="flex size-full flex-col bg-[#141518] p-3"
+        data-test-id="html-page-canvas"
       >
-        {{ ai.htmlPageEmpty }}
+        <div
+          class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg shadow-[0_8px_30px_rgb(0_0_0/0.5)]"
+          :class="hasPage ? 'border border-white/10' : 'border border-dashed border-white/15'"
+        >
+          <div
+            class="flex h-8 shrink-0 items-center gap-1.5 border-b border-white/10 bg-[#1e2025] px-3"
+          >
+            <span class="size-2.5 rounded-full bg-[#ff5f57]/80" />
+            <span class="size-2.5 rounded-full bg-[#febc2e]/80" />
+            <span class="size-2.5 rounded-full bg-[#28c840]/80" />
+            <div
+              class="ml-2 flex h-5 min-w-0 flex-1 items-center gap-1 rounded bg-black/30 px-2 text-[10px] text-muted"
+            >
+              <icon-lucide-globe class="size-3 shrink-0" />
+              <span class="truncate">localhost:5173/page.html</span>
+            </div>
+          </div>
+          <iframe
+            v-if="hasPage"
+            sandbox="allow-scripts"
+            :srcdoc="html"
+            title="html-page-preview"
+            class="min-h-0 flex-1 border-0 bg-white"
+            data-test-id="html-page-preview-frame"
+          />
+          <div
+            v-else
+            class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center"
+            data-test-id="html-page-empty"
+          >
+            <icon-lucide-globe class="size-8 text-muted/50" />
+            <p class="text-xs text-muted">{{ ai.htmlPageEmpty }}</p>
+            <p class="max-w-64 text-[10px] leading-relaxed text-muted/60">
+              {{ ai.htmlPageCanvasHint }}
+            </p>
+          </div>
+        </div>
       </div>
       <textarea
         v-else
@@ -171,12 +204,16 @@ function handlePromptKeydown(event: KeyboardEvent) {
 
     <div class="shrink-0 border-t border-border p-2.5">
       <div
-        v-if="generating || errorMsg"
+        v-if="generating || errorMsg || voiceState !== 'idle' || voiceError"
         class="px-1 pb-1.5 text-[11px] leading-tight"
-        :class="errorMsg ? 'text-red-400' : 'text-muted'"
+        :class="errorMsg || voiceError ? 'text-red-400' : 'text-muted'"
         data-test-id="html-page-status"
       >
-        <template v-if="errorMsg">{{ errorMsg }}</template>
+        <template v-if="voiceError">{{ voiceError }}</template>
+        <template v-else-if="errorMsg">{{ errorMsg }}</template>
+        <template v-else-if="voiceState === 'recording'">{{ ai.voiceListening }}</template>
+        <template v-else-if="voiceState === 'transcribing'">{{ ai.voiceTranscribing }}</template>
+        <template v-else-if="voiceState === 'polishing'">{{ ai.voicePolishing }}</template>
         <template v-else>{{ ai.htmlPageGenerating }}</template>
       </div>
       <div class="flex items-end gap-2">
@@ -189,6 +226,25 @@ function handlePromptKeydown(event: KeyboardEvent) {
           data-test-id="html-page-prompt"
           @keydown="handlePromptKeydown"
         />
+        <IconButton
+          :label="voiceState === 'recording' ? ai.stopVoiceInput : ai.voiceInput"
+          size="sm"
+          data-test-id="html-page-voice-button"
+          :disabled="generating || voiceState === 'transcribing' || voiceState === 'polishing'"
+          :class="
+            voiceState === 'recording'
+              ? 'border border-red-500 text-red-500 hover:text-red-500'
+              : ''
+          "
+          @click="handleVoiceButton"
+        >
+          <icon-lucide-loader-circle
+            v-if="voiceState === 'transcribing' || voiceState === 'polishing'"
+            class="size-3.5 animate-spin"
+          />
+          <icon-lucide-square v-else-if="voiceState === 'recording'" class="size-3" />
+          <icon-lucide-mic v-else class="size-3.5" />
+        </IconButton>
         <AppButton
           size="sm"
           data-test-id="html-page-generate"

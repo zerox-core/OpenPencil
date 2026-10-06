@@ -178,5 +178,6 @@
   "htmlPageExport": "导出 HTML",
   "htmlPageApply": "应用代码",
   "htmlPageEmpty": "在下方描述一个页面，AI 会在这里生成它。",
+  "htmlPageCanvasHint": "这里是网页画布：AI 在这里生成独立的 HTML 页面，与左侧白色设计画布互不影响。",
   "htmlPageGenerate": "生成"
 }
