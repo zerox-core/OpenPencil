@@ -35,6 +35,12 @@ function applyImportedCanvasMetadata(
 ) {
   page.source.format = 'fig'
   page.source.orderKey = canvasNc.parentIndex?.position ?? null
+  if (canvasNc.pluginData)
+    page.pluginData = canvasNc.pluginData.map((entry) => ({
+      pluginId: entry.pluginID,
+      key: entry.key,
+      value: entry.value
+    }))
   if (canvasNc.backgroundColor)
     page.source.fig.rawNodeFields.backgroundColor = structuredClone(canvasNc.backgroundColor)
   if (canvasNc.backgroundPaints)

@@ -19,12 +19,17 @@ import type { SceneNode } from '@open-pencil/scene-graph'
 import { PageListRoot, useFlatReorderDrag, useI18n, useInlineRename } from '@open-pencil/vue'
 
 import { useEditorStore } from '@/app/editor/active-store'
-import { ensureMockPage, isMockPage } from '@/app/mock/pages'
+import {
+  createMockId,
+  ensureMockPage,
+  isMockPage,
+  withMockPagePluginData
+} from '@/app/mock/pages'
 import IconButton from '@/components/ui/button/IconButton.vue'
 import { useMenuUI } from '@/components/ui/menu/menu'
 import pageListTheme from '@/theme/page-list'
 
-type PageItem = Pick<SceneNode, 'id' | 'name' | 'childIds'>
+type PageItem = Pick<SceneNode, 'id' | 'name' | 'childIds' | 'pluginData'>
 
 interface PageActions {
   rename: (pageId: string, name: string) => void
@@ -66,7 +71,12 @@ function startRename(pg: PageItem, renamePage: (pageId: string, name: string) =>
 
 function addMockPage() {
   const id = store.addPage()
-  if (id) ensureMockPage(id)
+  if (!id) return
+  const node = store.graph.getNode(id)
+  if (!node) return
+  const mockId = createMockId()
+  store.updateNodeWithUndo(id, { pluginData: withMockPagePluginData(node, mockId) }, 'Mock page')
+  ensureMockPage(mockId)
 }
 
 function pageDropPosition(pg: PageItem): 'before' | 'after' | undefined {
@@ -152,7 +162,7 @@ function setupPageRowRef(
                   :class="pageStyles(pg, currentPageId).renameRow()"
                 >
                   <icon-lucide-globe
-                    v-if="isMockPage(pg.id)"
+                    v-if="isMockPage(pg)"
                     :class="pageStyles(pg, currentPageId).icon()"
                   />
                   <icon-lucide-file v-else :class="pageStyles(pg, currentPageId).icon()" />
@@ -181,7 +191,7 @@ function setupPageRowRef(
                   @dblclick="startRename(pg, actions.rename)"
                 >
                   <icon-lucide-globe
-                    v-if="isMockPage(pg.id)"
+                    v-if="isMockPage(pg)"
                     :class="pageStyles(pg, currentPageId).icon()"
                   />
                   <icon-lucide-file v-else :class="pageStyles(pg, currentPageId).icon()" />

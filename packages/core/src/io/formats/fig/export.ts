@@ -362,6 +362,13 @@ function buildCanvasEntries(
       }
     )
     applyImportedCanvasFields(page, canvasNc)
+    if (page.pluginData.length > 0) {
+      canvasNc.pluginData = page.pluginData.map((entry) => ({
+        pluginID: entry.pluginId,
+        key: entry.key,
+        value: entry.value
+      }))
+    }
     if (page.internalOnly) canvasNc.internalOnly = true
     canvasEntries.push({ page, canvasGuid, canvasNc })
   }

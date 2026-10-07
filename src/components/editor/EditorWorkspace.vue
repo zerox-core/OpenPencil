@@ -32,7 +32,10 @@ const { isMobile } = useViewportKind()
 const initialEditorLayout = loadEditorLayout()
 const horizontalSplitterStyles = tv(splitterTheme)({ direction: 'horizontal' })
 
-const mockMode = computed(() => isMockPage(store.state.currentPageId))
+const mockMode = computed(() => {
+  void store.state.sceneVersion
+  return isMockPage(store.graph.getNode(store.state.currentPageId))
+})
 </script>
 
 <template>

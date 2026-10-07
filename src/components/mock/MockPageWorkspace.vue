@@ -10,7 +10,7 @@ import { useVoiceInput } from '@/app/ai/voice/use-voice-input'
 import { saveExportedFile } from '@/app/document/export/files'
 import { downloadBlob } from '@/app/document/io/browser'
 import { useEditorStore } from '@/app/editor/active-store'
-import { MOCK_PAGE_SIZES, ensureMockPage, mockPageState } from '@/app/mock/pages'
+import { MOCK_PAGE_SIZES, ensureMockPage, getMockPageId, mockPageState } from '@/app/mock/pages'
 import type { MockPageSizeKind } from '@/app/mock/pages'
 import AppButton from '@/components/ui/button/AppButton.vue'
 import IconButton from '@/components/ui/button/IconButton.vue'
@@ -32,13 +32,16 @@ const SIZE_KINDS: MockPageSizeKind[] = ['desktop', 'tablet', 'phone']
 const { ai } = useI18n()
 const store = useEditorStore()
 
-const pageId = computed(() => store.state.currentPageId)
-const page = computed(() => mockPageState(pageId.value))
+const pageNode = computed(() => {
+  void store.state.sceneVersion
+  return store.graph.getNode(store.state.currentPageId)
+})
+const page = computed(() => mockPageState(pageNode.value))
 
 watch(
-  pageId,
-  (id) => {
-    if (id) ensureMockPage(id)
+  () => getMockPageId(pageNode.value),
+  (mockId) => {
+    if (mockId) ensureMockPage(mockId)
   },
   { immediate: true }
 )
@@ -65,7 +68,7 @@ const frameScale = computed(() => {
   return Math.min(1, availWidth / state.width, availHeight / state.height)
 })
 
-const frameStyle = computed<Record<string, string>>(() => {
+const frameStyle = computed<Record<string, string>>((): Record<string, string> => {
   const state = page.value
   if (!state) return {}
   const scale = frameScale.value
@@ -75,7 +78,7 @@ const frameStyle = computed<Record<string, string>>(() => {
   }
 })
 
-const innerStyle = computed<Record<string, string>>(() => {
+const innerStyle = computed<Record<string, string>>((): Record<string, string> => {
   const state = page.value
   if (!state) return {}
   return {
