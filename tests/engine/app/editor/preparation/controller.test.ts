@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 
-import { createEditorPreparationController } from '@/app/editor/preparation/controller'
+import {
+  createEditorPreparationController,
+  PresentationTimeoutError
+} from '@/app/editor/preparation/controller'
 import { createEditorPreparationEvents } from '@/app/editor/preparation/events'
 import type { EditorPreparationResult } from '@/app/editor/preparation/types'
 import { createInitialAppEditorState } from '@/app/editor/session/types'
@@ -84,9 +87,8 @@ describe('editor preparation controller', () => {
     })
     const handle = controller.begin({ kind: 'page-switch' })
 
-    await expect(controller.waitForPresentation(handle.id, 7)).rejects.toHaveProperty(
-      'message',
-      'The operation was timed out'
+    await expect(controller.waitForPresentation(handle.id, 7)).rejects.toBeInstanceOf(
+      PresentationTimeoutError
     )
     handle.fail({ code: 'render-failed', message: 'Timed out', retryable: true })
     expect(state.preparation).toBeNull()

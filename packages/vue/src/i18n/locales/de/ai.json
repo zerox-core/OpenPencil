@@ -154,6 +154,7 @@
   "mockPageEmptyTitle": "Leere Mock-Canvas",
   "mockPageEmptyHint": "Beschreibe im Chat links die gewünschte Web- oder Mobilseite – die KI generiert sie auf dieser Canvas.",
   "mockPageDownload": "HTML herunterladen",
+  "mockPageModel": "Generierungsmodell",
   "mockPageSizeDesktop": "Desktop",
   "mockPageSizeTablet": "Tablet",
   "mockPageSizePhone": "Smartphone",

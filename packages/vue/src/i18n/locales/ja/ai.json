@@ -154,6 +154,7 @@
   "mockPageEmptyTitle": "空のモックキャンバス",
   "mockPageEmptyHint": "左のチャットで作成したい Web ページやモバイルページを説明すると、AI がこのキャンバスに生成します。",
   "mockPageDownload": "HTML をダウンロード",
+  "mockPageModel": "生成モデル",
   "mockPageSizeDesktop": "デスクトップ",
   "mockPageSizeTablet": "タブレット",
   "mockPageSizePhone": "スマートフォン",

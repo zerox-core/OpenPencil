@@ -185,6 +185,7 @@
   "mockPageEmptyTitle": "空白 Mock 画布",
   "mockPageEmptyHint": "在左侧对话里描述想要的网页或手机页面，AI 会把它生成到这块画布上。",
   "mockPageDownload": "下载 HTML",
+  "mockPageModel": "生成模型",
   "mockPageSizeDesktop": "桌面",
   "mockPageSizeTablet": "平板",
   "mockPageSizePhone": "手机",

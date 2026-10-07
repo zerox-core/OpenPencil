@@ -1,11 +1,17 @@
 <script setup lang="ts">
-import { generateText } from 'ai'
 import { useElementSize } from '@vueuse/core'
+import { generateText } from 'ai'
 import { computed, nextTick, ref, watch } from 'vue'
 
 import { useI18n } from '@open-pencil/vue'
 
-import { createAIModelRuntime } from '@/app/ai/models'
+import {
+  aiModelSettings,
+  createAIModelRuntime,
+  designModelProfiles,
+  setModelRoleAssignment,
+  type AIModelProfileId
+} from '@/app/ai/models'
 import { useVoiceInput } from '@/app/ai/voice/use-voice-input'
 import { saveExportedFile } from '@/app/document/export/files'
 import { downloadBlob } from '@/app/document/io/browser'
@@ -108,7 +114,9 @@ function sizeKindLabel(kind: MockPageSizeKind): string {
 function isActiveSize(kind: MockPageSizeKind): boolean {
   const state = page.value
   if (!state) return false
-  return state.width === MOCK_PAGE_SIZES[kind].width && state.height === MOCK_PAGE_SIZES[kind].height
+  return (
+    state.width === MOCK_PAGE_SIZES[kind].width && state.height === MOCK_PAGE_SIZES[kind].height
+  )
 }
 
 function applySize(kind: MockPageSizeKind) {
@@ -116,6 +124,11 @@ function applySize(kind: MockPageSizeKind) {
   if (!state || generating.value) return
   state.width = MOCK_PAGE_SIZES[kind].width
   state.height = MOCK_PAGE_SIZES[kind].height
+}
+
+function handleModelChange(event: Event) {
+  const profileId = (event.target as HTMLSelectElement).value as AIModelProfileId
+  setModelRoleAssignment('design', profileId)
 }
 
 function extractHTML(text: string): string {
@@ -235,7 +248,9 @@ function handlePromptKeydown(event: KeyboardEvent) {
           >
             <div
               class="max-w-[85%] rounded-lg px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap"
-              :class="message.role === 'user' ? 'bg-accent text-white' : 'bg-surface/5 text-surface'"
+              :class="
+                message.role === 'user' ? 'bg-accent text-white' : 'bg-surface/5 text-surface'
+              "
               :data-test-id="
                 message.role === 'user' ? 'mock-page-msg-user' : 'mock-page-msg-assistant'
               "
@@ -280,7 +295,9 @@ function handlePromptKeydown(event: KeyboardEvent) {
             data-test-id="mock-page-voice-button"
             :disabled="generating || voiceState === 'transcribing' || voiceState === 'polishing'"
             :class="
-              voiceState === 'recording' ? 'border border-red-500 text-red-500 hover:text-red-500' : ''
+              voiceState === 'recording'
+                ? 'border border-red-500 text-red-500 hover:text-red-500'
+                : ''
             "
             @click="handleVoiceButton"
           >
@@ -311,7 +328,9 @@ function handlePromptKeydown(event: KeyboardEvent) {
             data-test-id="mock-page-preview-toggle"
             class="rounded px-2.5 py-1 text-[10px]"
             :class="
-              view === 'preview' ? 'bg-white/10 font-semibold text-surface' : 'text-muted hover:text-surface'
+              view === 'preview'
+                ? 'bg-white/10 font-semibold text-surface'
+                : 'text-muted hover:text-surface'
             "
             @click="view = 'preview'"
           >
@@ -322,7 +341,9 @@ function handlePromptKeydown(event: KeyboardEvent) {
             data-test-id="mock-page-code-toggle"
             class="rounded px-2.5 py-1 text-[10px]"
             :class="
-              view === 'code' ? 'bg-white/10 font-semibold text-surface' : 'text-muted hover:text-surface'
+              view === 'code'
+                ? 'bg-white/10 font-semibold text-surface'
+                : 'text-muted hover:text-surface'
             "
             @click="view = 'code'"
           >
@@ -335,7 +356,11 @@ function handlePromptKeydown(event: KeyboardEvent) {
           :key="kind"
           type="button"
           class="rounded px-2 py-1 text-[10px]"
-          :class="isActiveSize(kind) ? 'bg-white/10 font-semibold text-surface' : 'text-muted hover:text-surface'"
+          :class="
+            isActiveSize(kind)
+              ? 'bg-white/10 font-semibold text-surface'
+              : 'text-muted hover:text-surface'
+          "
           :data-test-id="'mock-page-size-' + kind"
           @click="applySize(kind)"
         >
@@ -345,6 +370,18 @@ function handlePromptKeydown(event: KeyboardEvent) {
           {{ page?.width ?? 0 }} × {{ page?.height ?? 0 }}
         </span>
         <div class="flex-1" />
+        <select
+          :value="aiModelSettings.assignments.design"
+          :disabled="generating"
+          :title="ai.mockPageModel"
+          class="h-6 max-w-32 rounded border border-white/10 bg-transparent px-1 text-[10px] text-surface outline-none disabled:opacity-50"
+          data-test-id="mock-page-model-select"
+          @change="handleModelChange"
+        >
+          <option v-for="profile in designModelProfiles()" :key="profile.id" :value="profile.id">
+            {{ profile.name }}
+          </option>
+        </select>
         <AppButton
           size="xs"
           variant="outline"
@@ -408,7 +445,7 @@ function handlePromptKeydown(event: KeyboardEvent) {
           <pre
             class="min-h-0 flex-1 overflow-auto rounded-lg border border-white/10 bg-black/30 p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-surface/80"
             data-test-id="mock-page-code-view"
-          >{{ page?.html ?? '' }}</pre>
+            >{{ page?.html ?? '' }}</pre>
         </div>
       </div>
     </div>

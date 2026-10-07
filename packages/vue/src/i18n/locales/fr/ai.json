@@ -154,6 +154,7 @@
   "mockPageEmptyTitle": "Canevas mock vide",
   "mockPageEmptyHint": "Décrivez dans le chat à gauche la page web ou mobile souhaitée et l'IA la générera sur ce canevas.",
   "mockPageDownload": "Télécharger le HTML",
+  "mockPageModel": "Modèle de génération",
   "mockPageSizeDesktop": "Bureau",
   "mockPageSizeTablet": "Tablette",
   "mockPageSizePhone": "Téléphone",

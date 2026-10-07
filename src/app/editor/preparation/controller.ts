@@ -1,3 +1,4 @@
+import { TimeoutError } from 'es-toolkit'
 import { withTimeout } from 'es-toolkit/promise'
 
 import type { EditorPreparationEventEmitter } from '@/app/editor/preparation/events'
@@ -9,6 +10,7 @@ import type {
   EditorPreparationUpdate
 } from '@/app/editor/preparation/types'
 import type { AppEditorState } from '@/app/editor/session/types'
+import { notificationMessages } from '@/app/i18n/notifications'
 
 const PRESENTATION_TIMEOUT_MS = 10_000
 
@@ -19,6 +21,14 @@ interface PresentationWaiter {
 
 export interface EditorPreparationControllerOptions {
   presentationTimeoutMs?: number
+}
+
+/** Raised when a committed scene is not presented within the presentation timeout. */
+export class PresentationTimeoutError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'PresentationTimeoutError'
+  }
 }
 
 export interface EditorPreparationController {
@@ -133,7 +143,16 @@ export function createEditorPreparationController(
             presentationWaiters.set(id, { sceneVersion, resolve })
           }),
         presentationTimeoutMs
-      ).finally(() => presentationWaiters.delete(id))
+      )
+        .catch((error: unknown) => {
+          // Localize the timeout: this rejection also reaches the global
+          // unhandled-rejection toast verbatim.
+          if (error instanceof TimeoutError) {
+            throw new PresentationTimeoutError(notificationMessages.get().presentationTimedOut)
+          }
+          throw error
+        })
+        .finally(() => presentationWaiters.delete(id))
     },
     dispose() {
       activeCancel?.('tab-closed')

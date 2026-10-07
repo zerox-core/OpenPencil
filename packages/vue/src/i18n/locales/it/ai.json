@@ -154,6 +154,7 @@
   "mockPageEmptyTitle": "Canvas mock vuota",
   "mockPageEmptyHint": "Descrivi nella chat a sinistra la pagina web o mobile desiderata e l'IA la genererà su questa canvas.",
   "mockPageDownload": "Scarica HTML",
+  "mockPageModel": "Modello di generazione",
   "mockPageSizeDesktop": "Desktop",
   "mockPageSizeTablet": "Tablet",
   "mockPageSizePhone": "Telefono",

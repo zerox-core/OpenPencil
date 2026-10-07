@@ -14,7 +14,10 @@ import { resolveFigmaClipboardImages } from '@/app/editor/clipboard/figma-images
 import { bindClipboardNotifications } from '@/app/editor/clipboard/notifications'
 import { loadFont } from '@/app/editor/fonts'
 import { createCanvasPaneRegistry } from '@/app/editor/panes/registry'
-import { createEditorPreparationController } from '@/app/editor/preparation/controller'
+import {
+  createEditorPreparationController,
+  PresentationTimeoutError
+} from '@/app/editor/preparation/controller'
 import {
   createEditorPreparationEvents,
   type EditorPreparationEventName,
@@ -27,7 +30,6 @@ import {
   defineEditorStoreAccessors
 } from '@/app/editor/session/modules'
 import { createInitialAppEditorState, type AppEditorState } from '@/app/editor/session/types'
-import { notificationMessages } from '@/app/i18n/notifications'
 import { toast } from '@/app/shell/ui'
 import { IS_BROWSER, IS_TAURI } from '@/constants'
 
@@ -180,19 +182,16 @@ export function createEditorStore(initialGraph?: SceneGraph) {
     } catch (error) {
       if (preparation.signal.aborted) throw error
       if (ownsPreparation) {
-        const presentationTimedOut =
-          error instanceof Error && error.message === 'The operation was timed out'
+        const presentationTimedOut = error instanceof PresentationTimeoutError
         preparation.fail({
           code: presentationTimedOut ? 'render-failed' : 'layout-failed',
           message: error instanceof Error ? error.message : String(error),
           retryable: true
         })
-        if (presentationTimedOut) {
-          toast.error(
-            notificationMessages.get().operationFailed({
-              error: error instanceof Error ? error.message : String(error)
-            })
-          )
+        if (error instanceof PresentationTimeoutError) {
+          // Same text as the global unhandled-rejection toast, so the toast
+          // store dedupes the two into one visible message.
+          toast.error(error.message)
         }
       }
       throw error

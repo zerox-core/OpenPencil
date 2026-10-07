@@ -26,6 +26,7 @@ export const notificationMessageDefaults = {
   vectorizeCredentialFailed: params('{error}. Update it in Settings → Media.'),
   vectorizeFailed: params('{provider} could not vectorize this image: {error}'),
   operationFailed: params('Operation failed: {error}'),
+  presentationTimedOut: 'Page rendering timed out. Please try again.',
   storageConnected: 'Connected. Storage namespace is ready.',
   storageConnectionFailed: params('Could not connect to storage: {error}'),
   deepLinkLocateFile: params('Locate “{file}” to follow this link.'),

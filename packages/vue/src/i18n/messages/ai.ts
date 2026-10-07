@@ -167,7 +167,8 @@ export const aiMessageDefaults = {
   voiceListening: 'Listening… click stop when finished.',
   voicePolishing: 'Polishing the transcript with the model…',
   voiceUnavailable: 'Speech recognition is unavailable in this environment.',
-  voiceRecognitionError: 'Speech recognition failed. Check the microphone permission and try again.',
+  voiceRecognitionError:
+    'Speech recognition failed. Check the microphone permission and try again.',
   voiceTranscribing: 'Transcribing the recording…',
   voiceNeedKey: 'Save a speech-to-text API key in Settings → AI → Voice input first.',
   voiceMicDenied: 'Microphone access was denied. Allow the microphone and try again.',
@@ -192,7 +193,8 @@ export const aiMessageDefaults = {
   htmlPageExport: 'Export HTML',
   htmlPageApply: 'Apply code',
   htmlPageEmpty: 'Describe a page below and the AI will generate it here.',
-  htmlPageCanvasHint: 'This is the web canvas — the AI generates standalone HTML pages here, separate from the white design canvas.',
+  htmlPageCanvasHint:
+    'This is the web canvas — the AI generates standalone HTML pages here, separate from the white design canvas.',
   htmlPageGenerate: 'Generate',
   mockPageAddDesign: 'Design page',
   mockPageAddMock: 'Mock page',
@@ -200,6 +202,7 @@ export const aiMessageDefaults = {
   mockPageEmptyHint:
     'Describe a web or mobile page in the chat on the left and the AI will generate it onto this canvas.',
   mockPageDownload: 'Download HTML',
+  mockPageModel: 'Generation model',
   mockPageSizeDesktop: 'Desktop',
   mockPageSizeTablet: 'Tablet',
   mockPageSizePhone: 'Phone',

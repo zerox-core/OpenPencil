@@ -154,6 +154,7 @@
   "mockPageEmptyTitle": "Pusty canvas mock",
   "mockPageEmptyHint": "Opisz w czacie po lewej stronę internetową lub mobilną, a AI wygeneruje ją na tym canvasie.",
   "mockPageDownload": "Pobierz HTML",
+  "mockPageModel": "Model generujący",
   "mockPageSizeDesktop": "Komputer",
   "mockPageSizeTablet": "Tablet",
   "mockPageSizePhone": "Telefon",

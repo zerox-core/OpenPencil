@@ -154,6 +154,7 @@
   "mockPageEmptyTitle": "Пустой мок-холст",
   "mockPageEmptyHint": "Опишите в чате слева нужную веб- или мобильную страницу, и ИИ сгенерирует её на этом холсте.",
   "mockPageDownload": "Скачать HTML",
+  "mockPageModel": "Модель генерации",
   "mockPageSizeDesktop": "Десктоп",
   "mockPageSizeTablet": "Планшет",
   "mockPageSizePhone": "Телефон",

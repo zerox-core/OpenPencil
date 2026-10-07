@@ -154,6 +154,7 @@
   "mockPageEmptyTitle": "Lienzo mock en blanco",
   "mockPageEmptyHint": "Describe en el chat de la izquierda la página web o móvil que quieres y la IA la generará en este lienzo.",
   "mockPageDownload": "Descargar HTML",
+  "mockPageModel": "Modelo de generación",
   "mockPageSizeDesktop": "Escritorio",
   "mockPageSizeTablet": "Tableta",
   "mockPageSizePhone": "Teléfono",
