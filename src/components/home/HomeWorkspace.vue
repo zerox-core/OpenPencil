@@ -28,7 +28,7 @@ import AppButton from '@/components/ui/button/AppButton.vue'
 import IconButton from '@/components/ui/button/IconButton.vue'
 import SegmentedControl from '@/components/ui/select/SegmentedControl.vue'
 
-const emit = defineEmits<{ 'new-document': [] }>()
+const emit = defineEmits<{ 'new-document': []; 'new-mock-document': [] }>()
 const { panels, locale, storage, files, common, settings } = useI18n()
 const { isMobile } = useViewportKind()
 const view = useLocalStorage<'grid' | 'list'>('open-pencil:home-files-view', 'grid')
@@ -164,7 +164,11 @@ function formattedDate(updatedAt: string): string {
     <section
       class="mx-auto flex w-full max-w-7xl flex-col pt-4 pr-[max(1rem,env(safe-area-inset-right))] pb-4 pl-[max(1rem,env(safe-area-inset-left))] sm:px-6 sm:py-5"
     >
-      <HomeSearchActions v-model="query" @new-document="emit('new-document')" />
+      <HomeSearchActions
+        v-model="query"
+        @new-document="emit('new-document')"
+        @new-mock-document="emit('new-mock-document')"
+      />
 
       <p v-if="openError" class="mb-4 text-xs text-danger" role="alert">{{ openError }}</p>
       <p

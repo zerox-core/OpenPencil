@@ -11,6 +11,7 @@ export interface MockChatMessage {
 
 export interface MockPageState {
   html: string
+  files: Record<string, string>
   width: number
   height: number
   messages: MockChatMessage[]
@@ -76,6 +77,20 @@ function sanitizeMessages(value: unknown): MockChatMessage[] {
   return messages
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function sanitizeFiles(value: unknown): Record<string, string> {
+  if (!isRecord(value)) return {}
+  const files: Record<string, string> = {}
+  for (const [path, content] of Object.entries(value)) {
+    const name = path.trim()
+    if (name && typeof content === 'string') files[name] = content
+  }
+  return files
+}
+
 function loadRegistry(): MockPageRegistry {
   const parsed = readMockPagesStorage()
   if (!parsed || typeof parsed !== 'object') return {}
@@ -85,6 +100,7 @@ function loadRegistry(): MockPageRegistry {
     const state = value as Partial<MockPageState>
     registry[mockId] = {
       html: typeof state.html === 'string' ? state.html : '',
+      files: sanitizeFiles(state.files),
       width:
         typeof state.width === 'number' && state.width > 0
           ? state.width
@@ -126,6 +142,7 @@ export function ensureMockPage(mockId: string): MockPageState {
   if (mockId in registry) return registry[mockId]
   const created: MockPageState = {
     html: '',
+    files: {},
     width: MOCK_PAGE_SIZES.desktop.width,
     height: MOCK_PAGE_SIZES.desktop.height,
     messages: []

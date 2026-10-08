@@ -6,6 +6,7 @@ import { documentNameFromFigPath } from '@/app/document/io/names'
 import { chooseBrowserFigSaveHandle, chooseTauriFigSavePath } from '@/app/document/io/save-targets'
 import type { DocumentSourceAccess } from '@/app/document/io/types'
 import { createDocumentWriter } from '@/app/document/io/write'
+import { rememberRecentFile } from '@/app/recent-files'
 import { IS_TAURI } from '@/constants'
 
 type SaveDocumentState = EditorState & { documentName: string }
@@ -59,7 +60,10 @@ export function createSaveActions({
     if (storageBinding || filePath || fileHandle) {
       const { data, version } = await buildVersionedFigFile()
       const wrote = await writeFile(data, version)
-      if (wrote && !storageBinding) setSourceIdentity({ handle: fileHandle, path: filePath })
+      if (wrote && !storageBinding) {
+        setSourceIdentity({ handle: fileHandle, path: filePath })
+        if (filePath) rememberRecentFile(filePath)
+      }
       return wrote
     }
     if (downloadName) {
@@ -82,7 +86,10 @@ export function createSaveActions({
       setFileHandle(null)
       state.documentName = documentNameFromFigPath(path)
       const wrote = await writeFile(data, version)
-      if (wrote) setSourceIdentity({ handle: null, path })
+      if (wrote) {
+        setSourceIdentity({ handle: null, path })
+        rememberRecentFile(path)
+      }
       startWatchingFile()
       return wrote
     }

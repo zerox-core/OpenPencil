@@ -201,8 +201,9 @@ export const aiMessageDefaults = {
   mockPageEmptyTitle: 'Blank mock canvas',
   mockPageEmptyHint:
     'Describe a web or mobile page in the chat on the left and the AI will generate it onto this canvas.',
-  mockPageDownload: 'Download HTML',
+  mockPageDownload: 'Download project',
   mockPageModel: 'Generation model',
+  mockPageNew: 'New mock page',
   mockPageSizeDesktop: 'Desktop',
   mockPageSizeTablet: 'Tablet',
   mockPageSizePhone: 'Phone',

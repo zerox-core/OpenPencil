@@ -9,9 +9,9 @@ import { activeTab } from '@/app/tabs'
 import AppButton from '@/components/ui/button/AppButton.vue'
 import AppInput from '@/components/ui/input/AppInput.vue'
 
-const emit = defineEmits<{ 'new-document': [] }>()
+const emit = defineEmits<{ 'new-document': []; 'new-mock-document': [] }>()
 const query = defineModel<string>({ required: true })
-const { menu, files } = useI18n()
+const { menu, files, ai } = useI18n()
 const { isMobile } = useViewportKind()
 const searchInput = templateRef<{ focus: (options?: FocusOptions) => void }>('searchInput')
 
@@ -53,7 +53,7 @@ watch(
     >
       <template #leading><icon-lucide-search class="size-4" /></template>
     </AppInput>
-    <div class="grid grid-cols-2 gap-2 md:contents">
+    <div class="grid grid-cols-3 gap-2 md:contents">
       <AppButton
         :size="isMobile ? 'lg' : 'md'"
         variant="outline"
@@ -62,6 +62,15 @@ watch(
       >
         <template #leading><icon-lucide-folder-open class="size-3.5" /></template>
         {{ menu.open }}
+      </AppButton>
+      <AppButton
+        :size="isMobile ? 'lg' : 'md'"
+        variant="outline"
+        data-test-id="home-new-mock"
+        @click="emit('new-mock-document')"
+      >
+        <template #leading><icon-lucide-layout-template class="size-3.5" /></template>
+        {{ ai.mockPageNew }}
       </AppButton>
       <AppButton
         :size="isMobile ? 'lg' : 'md'"

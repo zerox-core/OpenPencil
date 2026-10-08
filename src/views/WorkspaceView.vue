@@ -22,6 +22,7 @@ import {
   activeTab,
   createDocumentInCurrentTab,
   createHomeTab,
+  createMockDocumentInCurrentTab,
   createTab,
   getActiveStore,
   getTabsSnapshot,
@@ -181,7 +182,11 @@ onUnmounted(() => {
     <RenameSelectionDialog />
     <CommandPalette />
     <TabBar />
-    <HomeWorkspace v-show="activeTab?.kind === 'home'" @new-document="createDocumentInCurrentTab" />
+    <HomeWorkspace
+      v-show="activeTab?.kind === 'home'"
+      @new-document="createDocumentInCurrentTab"
+      @new-mock-document="createMockDocumentInCurrentTab"
+    />
     <EditorWorkspace v-if="activeTab?.kind !== 'home'" />
   </div>
 </template>

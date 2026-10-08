@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useElementSize } from '@vueuse/core'
-import { generateText } from 'ai'
+import { streamText } from 'ai'
+import { strToU8, zipSync } from 'fflate'
 import { computed, nextTick, ref, watch } from 'vue'
 
 import { useI18n } from '@open-pencil/vue'
@@ -22,16 +23,23 @@ import AppButton from '@/components/ui/button/AppButton.vue'
 import IconButton from '@/components/ui/button/IconButton.vue'
 
 const SYSTEM_PROMPT = [
-  '你是一个资深前端工程师。根据用户的描述生成一个完整的、可直接在浏览器打开的单文件 HTML 页面。',
-  'CSS 写在 style 标签内，JS 写在 script 标签内，可以通过 CDN 引入公开库（如 Tailwind、ECharts）。',
-  '页面要美观、现代、可交互，默认使用中文文案，除非用户另有要求。',
-  '输出的第一行必须是画布尺寸声明注释：<!-- page-size: 宽x高 -->。',
+  '你是一个资深前端工程师。根据用户的描述生成一个完整的前端小项目，由多个文件组成，保持正常的工作目录结构。',
+  '必须包含 index.html 作为入口；样式放 styles/main.css，交互脚本放 scripts/main.js；内容较多时可按需增加文件（如 styles/theme.css、scripts/utils.js），一律使用相对路径引用。',
+  'CSS 通过 <link rel="stylesheet" href="styles/main.css"> 引入；JS 通过 <script src="scripts/main.js"> 标签引入；也可以通过 CDN 引入公开库（如 Tailwind、ECharts）。',
+  '每个文件的内容之前必须有一行独立的文件标记注释，格式如下（标记独占一行，路径不加引号）：',
+  '<!-- file: index.html -->',
+  '<!-- file: styles/main.css -->',
+  '<!-- file: scripts/main.js -->',
+  '输出的第一行必须是画布尺寸声明注释：<!-- page-size: 宽x高 -->，之后按顺序输出每个文件。',
   '根据用户描述选择尺寸：桌面网页 1440x900、手机页面 390x844、平板页面 834x1194；',
   '用户明确给出尺寸时以用户为准；未指明时默认 1440x900，并按该尺寸设计布局。',
-  '只输出 HTML 代码本身，不要任何解释，不要使用 Markdown 代码围栏。'
-].join('')
+  '页面要美观、现代、可交互，默认使用中文文案，除非用户另有要求。',
+  '只输出文件内容本身，不要任何解释，不要使用 Markdown 代码围栏。'
+].join('\n')
 
 const PAGE_SIZE_PATTERN = /<!--\s*page-size:\s*(\d+)\s*x\s*(\d+)\s*-->/i
+const FILE_MARKER_PATTERN = /<!--\s*file:\s*([^>\r\n]+?)\s*-->/g
+const SCRIPT_CLOSE = '<\x2fscript>'
 
 const SIZE_KINDS: MockPageSizeKind[] = ['desktop', 'tablet', 'phone']
 
@@ -57,10 +65,46 @@ const view = ref<'preview' | 'code'>('preview')
 const generating = ref(false)
 const exporting = ref(false)
 const errorMsg = ref('')
+const streamedText = ref('')
+const selectedFile = ref('')
 
 const { voiceState, voiceError, handleVoiceButton } = useVoiceInput(prompt)
 
 const hasPage = computed(() => (page.value?.html.length ?? 0) > 0)
+
+const projectFiles = computed<Record<string, string>>(() => {
+  const state = page.value
+  if (!state) return {}
+  const names = Object.keys(state.files)
+  if (names.length > 0) return state.files
+  return state.html ? { 'page.html': state.html } : {}
+})
+
+const fileList = computed<string[]>(() => Object.keys(projectFiles.value))
+
+const entryFile = computed<string>(() =>
+  fileList.value.includes('index.html') ? 'index.html' : (fileList.value[0] ?? 'page.html')
+)
+
+const activeFileContent = computed<string>(() => projectFiles.value[selectedFile.value] ?? '')
+
+watch(
+  fileList,
+  (names) => {
+    if (!names.includes(selectedFile.value)) selectedFile.value = names[0] ?? ''
+  },
+  { immediate: true }
+)
+
+const currentSource = computed<string>(() => {
+  const state = page.value
+  if (!state) return ''
+  const names = Object.keys(state.files)
+  if (names.length > 0) {
+    return names.map((path) => `<!-- file: ${path} -->\n${state.files[path] ?? ''}`).join('\n\n')
+  }
+  return state.html
+})
 
 const stageRef = ref<HTMLElement | null>(null)
 const { width: stageWidth, height: stageHeight } = useElementSize(stageRef)
@@ -131,17 +175,65 @@ function handleModelChange(event: Event) {
   setModelRoleAssignment('design', profileId)
 }
 
-function extractHTML(text: string): string {
+function projectPath(target: string): string {
+  return target.trim().replace(/^\.?\//, '')
+}
+
+function stripFences(text: string): string {
   let t = text.trim()
   const fence = t.match(/```(?:html)?\s*([\s\S]*?)```/i)
   if (fence) t = (fence[1] ?? '').trim()
+  return t
+}
+
+function extractHTML(text: string): string {
+  const t = stripFences(text)
   const lower = t.toLowerCase()
   const doctypeIdx = lower.indexOf('<!doctype')
   const htmlIdx = lower.indexOf('<html')
   const start = doctypeIdx !== -1 ? doctypeIdx : htmlIdx
-  if (start > 0) t = t.slice(start)
-  else if (start === -1 && !/<[a-z][\s\S]*>/i.test(t)) return ''
+  if (start > 0) return t.slice(start)
+  if (start === -1 && !/<[a-z][\s\S]*>/i.test(t)) return ''
   return t
+}
+
+function parseProjectFiles(text: string): Record<string, string> {
+  const files: Record<string, string> = {}
+  const source = stripFences(text)
+  const markers = [...source.matchAll(FILE_MARKER_PATTERN)]
+  for (let index = 0; index < markers.length; index++) {
+    const marker = markers[index]
+    if (!marker || marker.index === undefined) continue
+    const path = projectPath(marker[1] ?? '')
+    if (!path) continue
+    const start = marker.index + marker[0].length
+    const next = markers[index + 1]
+    const end = next && next.index !== undefined ? next.index : source.length
+    const content = source.slice(start, end).trim()
+    if (content) files[path] = content
+  }
+  return files
+}
+
+function composePreview(files: Record<string, string>): string {
+  let html = files['index.html']
+  if (html === undefined) {
+    const fallback = Object.keys(files).find((name) => name.endsWith('.html'))
+    html = fallback === undefined ? '' : (files[fallback] ?? '')
+  }
+  if (!html) return ''
+  html = html.replace(/<link\b[^>]*href=["']([^"']+)["'][^>]*>/gi, (tag, href: string) => {
+    const css = files[projectPath(href)]
+    return css === undefined ? tag : `<style>\n${css}\n</style>`
+  })
+  html = html.replace(
+    /<script\b[^>]*src=["']([^"']+)["'][^>]*>\s*<\/script>/gi,
+    (tag, src: string) => {
+      const js = files[projectPath(src)]
+      return js === undefined ? tag : `<script>\n${js}\n${SCRIPT_CLOSE}`
+    }
+  )
+  return html
 }
 
 function clampSize(value: number): number {
@@ -161,28 +253,48 @@ async function generate() {
   generating.value = true
   state.messages.push({ role: 'user', text })
   prompt.value = ''
+  streamedText.value = ''
+  view.value = 'code'
   try {
     const userContent = hasPage.value
-      ? `这是当前页面的完整 HTML 代码：\n\n${state.html}\n\n请按以下要求修改这个页面，返回修改后的完整 HTML。\n${text}`
+      ? `这是当前项目的完整源代码：\n\n${currentSource.value}\n\n请按以下要求修改这个项目，按原格式返回修改后的全部文件。\n${text}`
       : text
-    const result = await generateText({
+    const stream = streamText({
       model: runtime.model,
       system: SYSTEM_PROMPT,
       prompt: userContent,
       maxOutputTokens: 16000
     })
-    const sizeMatch = result.text.match(PAGE_SIZE_PATTERN)
-    const extracted = extractHTML(result.text)
-    if (!extracted) {
-      errorMsg.value = ai.value.htmlPageNoHtml
-      state.messages.push({ role: 'assistant', text: ai.value.htmlPageNoHtml })
-      return
+    let accumulated = ''
+    for await (const chunk of stream.textStream) {
+      accumulated += chunk
+      streamedText.value = accumulated
+    }
+    const sizeMatch = accumulated.match(PAGE_SIZE_PATTERN)
+    const parsedFiles = parseProjectFiles(accumulated)
+    if (Object.keys(parsedFiles).length > 0) {
+      const composed = composePreview(parsedFiles)
+      if (!composed) {
+        errorMsg.value = ai.value.htmlPageNoHtml
+        state.messages.push({ role: 'assistant', text: ai.value.htmlPageNoHtml })
+        return
+      }
+      state.files = parsedFiles
+      state.html = composed
+    } else {
+      const single = extractHTML(accumulated)
+      if (!single) {
+        errorMsg.value = ai.value.htmlPageNoHtml
+        state.messages.push({ role: 'assistant', text: ai.value.htmlPageNoHtml })
+        return
+      }
+      state.files = {}
+      state.html = single
     }
     if (sizeMatch) {
       state.width = clampSize(Number(sizeMatch[1]))
       state.height = clampSize(Number(sizeMatch[2]))
     }
-    state.html = extracted
     view.value = 'preview'
     state.messages.push({ role: 'assistant', text: ai.value.mockPageAssistantDone })
   } catch (error) {
@@ -194,17 +306,21 @@ async function generate() {
   }
 }
 
-async function downloadHTML() {
+async function downloadProject() {
   const state = page.value
   if (!state || !state.html || exporting.value) return
   exporting.value = true
   try {
+    const entries: Record<string, Uint8Array> = {}
+    for (const [path, content] of Object.entries(projectFiles.value)) {
+      entries[path] = strToU8(content)
+    }
     await saveExportedFile(
-      new TextEncoder().encode(state.html),
-      'page.html',
-      'HTML',
-      '.html',
-      'text/html',
+      zipSync(entries),
+      'mock-project.zip',
+      'ZIP',
+      '.zip',
+      'application/zip',
       downloadBlob
     )
   } catch (error) {
@@ -259,8 +375,11 @@ function handlePromptKeydown(event: KeyboardEvent) {
             </div>
           </div>
           <div v-if="generating" class="mb-2 flex justify-start">
-            <div class="rounded-lg bg-surface/5 px-3 py-2 text-xs text-muted">
-              {{ ai.htmlPageGenerating }}
+            <div
+              class="rounded-lg bg-surface/5 px-3 py-2 text-xs text-muted"
+              data-test-id="mock-page-generating"
+            >
+              {{ ai.htmlPageGenerating }} · {{ streamedText.length }}
             </div>
           </div>
         </template>
@@ -277,7 +396,7 @@ function handlePromptKeydown(event: KeyboardEvent) {
           <template v-else-if="voiceState === 'recording'">{{ ai.voiceListening }}</template>
           <template v-else-if="voiceState === 'transcribing'">{{ ai.voiceTranscribing }}</template>
           <template v-else-if="voiceState === 'polishing'">{{ ai.voicePolishing }}</template>
-          <template v-else>{{ ai.htmlPageGenerating }}</template>
+          <template v-else>{{ ai.htmlPageGenerating }} · {{ streamedText.length }}</template>
         </div>
         <div class="flex items-end gap-2">
           <textarea
@@ -288,7 +407,7 @@ function handlePromptKeydown(event: KeyboardEvent) {
             class="block min-h-12 w-full resize-none rounded border border-border bg-transparent px-3 py-2 text-xs leading-relaxed text-surface outline-none placeholder:text-muted disabled:opacity-60"
             data-test-id="mock-page-prompt"
             @keydown="handlePromptKeydown"
-          />
+          ></textarea>
           <IconButton
             :label="voiceState === 'recording' ? ai.stopVoiceInput : ai.voiceInput"
             size="sm"
@@ -387,7 +506,7 @@ function handlePromptKeydown(event: KeyboardEvent) {
           variant="outline"
           data-test-id="mock-page-download"
           :disabled="!hasPage || exporting"
-          @click="downloadHTML"
+          @click="downloadProject"
         >
           {{ ai.mockPageDownload }}
         </AppButton>
@@ -414,7 +533,7 @@ function handlePromptKeydown(event: KeyboardEvent) {
                 class="ml-2 flex h-5 min-w-0 flex-1 items-center gap-1 rounded bg-black/30 px-2 text-[10px] text-muted"
               >
                 <icon-lucide-globe class="size-3 shrink-0" />
-                <span class="truncate">localhost:5173/page.html</span>
+                <span class="truncate">localhost:5173/{{ entryFile }}</span>
               </div>
             </div>
             <iframe
@@ -424,7 +543,7 @@ function handlePromptKeydown(event: KeyboardEvent) {
               title="mock-page-preview"
               class="min-h-0 flex-1 border-0 bg-white"
               data-test-id="mock-page-preview-frame"
-            />
+            ></iframe>
             <div
               v-else
               class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center"
@@ -438,14 +557,37 @@ function handlePromptKeydown(event: KeyboardEvent) {
             </div>
           </div>
         </div>
-        <div v-else class="flex size-full flex-col p-3" data-test-id="mock-page-code">
-          <div class="mb-2 shrink-0 text-[10px] text-muted" data-test-id="mock-page-code-hint">
-            {{ ai.mockPageCodeReadonly }}
+        <div v-else class="flex min-h-0 size-full gap-2 p-3" data-test-id="mock-page-code">
+          <div
+            v-if="!generating && fileList.length > 0"
+            class="max-h-full w-44 shrink-0 overflow-y-auto rounded-lg border border-white/10 bg-black/30 p-1.5"
+            data-test-id="mock-page-file-list"
+          >
+            <button
+              v-for="path in fileList"
+              :key="path"
+              type="button"
+              class="mb-0.5 flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left font-mono text-[10px]"
+              :class="
+                path === selectedFile ? 'bg-white/10 text-surface' : 'text-muted hover:text-surface'
+              "
+              data-test-id="mock-page-file-item"
+              :data-path="path"
+              @click="selectedFile = path"
+            >
+              <icon-lucide-file class="size-3 shrink-0" />
+              <span class="truncate">{{ path }}</span>
+            </button>
           </div>
-          <pre
-            class="min-h-0 flex-1 overflow-auto rounded-lg border border-white/10 bg-black/30 p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-surface/80"
-            data-test-id="mock-page-code-view"
-            >{{ page?.html ?? '' }}</pre>
+          <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div class="mb-2 shrink-0 text-[10px] text-muted" data-test-id="mock-page-code-hint">
+              {{ generating ? ai.htmlPageGenerating : ai.mockPageCodeReadonly }}
+            </div>
+            <pre
+              class="min-h-0 flex-1 overflow-auto rounded-lg border border-white/10 bg-black/30 p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-surface/80"
+              data-test-id="mock-page-code-view"
+              >{{ generating ? streamedText : activeFileContent }}</pre>
+          </div>
         </div>
       </div>
     </div>

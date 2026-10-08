@@ -26,6 +26,7 @@ import {
   createActiveStorageAdapter,
   type StorageDocument
 } from '@/app/integrations/storage'
+import { createMockId, ensureMockPage, withMockPagePluginData } from '@/app/mock/pages'
 import {
   cacheRecentFileThumbnail,
   loadCachedRecentFileThumbnail,
@@ -125,6 +126,31 @@ export function createDocumentInCurrentTab(): Tab {
   return getTabById(current.id) ?? current
 }
 
+/**
+ * Creates a document whose only page is a fresh mock page, so the home
+ * entry lands directly in the mock workspace instead of the design canvas.
+ */
+export function createMockDocumentInCurrentTab(): Tab {
+  const tab = createDocumentInCurrentTab()
+  const store = tab.store
+  const previousPageId = store.state.currentPageId
+  const pageId = store.addPage('Mock')
+  const node = store.graph.getNode(pageId)
+  if (node) {
+    const mockId = createMockId()
+    store.updateNodeWithUndo(
+      pageId,
+      { pluginData: withMockPagePluginData(node, mockId) },
+      'Mock page'
+    )
+    ensureMockPage(mockId)
+  }
+  if (previousPageId && previousPageId !== pageId && store.graph.getNode(previousPageId)) {
+    store.deletePage(previousPageId)
+  }
+  return tab
+}
+
 export function showNewTab(): void {
   const homeTab = tabsRef.value.find((tab) => tab.kind === 'home')
   if (homeTab) {
@@ -199,8 +225,7 @@ function reusableTabStore(): { store: EditorStore; created: boolean } {
     leaveHome(current.id)
     return { store: current.store, created: false }
   }
-  const isUntouched =
-    current?.store.state.documentName === '未命名' && !current.store.undo.canUndo
+  const isUntouched = current?.store.state.documentName === '未命名' && !current.store.undo.canUndo
   if (isUntouched) {
     leaveHome(current.id)
     return { store: current.store, created: false }
@@ -569,6 +594,7 @@ export function useTabsStore() {
     activeTabId,
     createHomeTab,
     createDocumentInCurrentTab,
+    createMockDocumentInCurrentTab,
     createTab,
     leaveHome,
     switchTab,
