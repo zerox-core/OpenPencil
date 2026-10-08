@@ -160,5 +160,14 @@
   "mockPageSizeTablet": "Tablet",
   "mockPageSizePhone": "Smartphone",
   "mockPageAssistantDone": "Fertig – die Seite rechts wurde aktualisiert.",
-  "mockPageCodeReadonly": "Der Code ist schreibgeschützt. Bitte die KI im Chat um Änderungen."
+  "mockPageCodeReadonly": "Der Code ist schreibgeschützt. Bitte die KI im Chat um Änderungen.",
+  "mockPageThinking": "Denkprozess",
+  "mockPageFullscreen": "Vollbild-Vorschau",
+  "mockPageExitFullscreen": "Vollbild beenden",
+  "mockPageShare": "Teilen",
+  "mockPageShareLink": "Link zum Teilen",
+  "mockPageShareCopied": "Link kopiert",
+  "mockPageShareStop": "Freigabe beenden",
+  "mockPageShareFailed": "Freigabe konnte nicht gestartet werden. Bitte erneut versuchen.",
+  "mockPageShareDesktopOnly": "Teilen ist nur in der Desktop-App verfügbar."
 }

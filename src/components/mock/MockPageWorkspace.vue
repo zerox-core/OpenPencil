@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { useElementSize } from '@vueuse/core'
-import { streamText } from 'ai'
+import { useElementSize, useEventListener } from '@vueuse/core'
 import { strToU8, zipSync } from 'fflate'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 import { useI18n } from '@open-pencil/vue'
 
@@ -17,31 +16,27 @@ import { useVoiceInput } from '@/app/ai/voice/use-voice-input'
 import { saveExportedFile } from '@/app/document/export/files'
 import { downloadBlob } from '@/app/document/io/browser'
 import { useEditorStore } from '@/app/editor/active-store'
+import { runMockAgent } from '@/app/mock/agent'
 import { MOCK_PAGE_SIZES, ensureMockPage, getMockPageId, mockPageState } from '@/app/mock/pages'
+import {
+  clampProjectSize,
+  composePreview,
+  extractHTML,
+  parseProjectFiles
+} from '@/app/mock/project'
 import type { MockPageSizeKind } from '@/app/mock/pages'
+import { IS_TAURI } from '@/constants'
 import AppButton from '@/components/ui/button/AppButton.vue'
 import IconButton from '@/components/ui/button/IconButton.vue'
 
-const SYSTEM_PROMPT = [
-  '你是一个资深前端工程师。根据用户的描述生成一个完整的前端小项目，由多个文件组成，保持正常的工作目录结构。',
-  '必须包含 index.html 作为入口；样式放 styles/main.css，交互脚本放 scripts/main.js；内容较多时可按需增加文件（如 styles/theme.css、scripts/utils.js），一律使用相对路径引用。',
-  'CSS 通过 <link rel="stylesheet" href="styles/main.css"> 引入；JS 通过 <script src="scripts/main.js"> 标签引入；也可以通过 CDN 引入公开库（如 Tailwind、ECharts）。',
-  '每个文件的内容之前必须有一行独立的文件标记注释，格式如下（标记独占一行，路径不加引号）：',
-  '<!-- file: index.html -->',
-  '<!-- file: styles/main.css -->',
-  '<!-- file: scripts/main.js -->',
-  '输出的第一行必须是画布尺寸声明注释：<!-- page-size: 宽x高 -->，之后按顺序输出每个文件。',
-  '根据用户描述选择尺寸：桌面网页 1440x900、手机页面 390x844、平板页面 834x1194；',
-  '用户明确给出尺寸时以用户为准；未指明时默认 1440x900，并按该尺寸设计布局。',
-  '页面要美观、现代、可交互，默认使用中文文案，除非用户另有要求。',
-  '只输出文件内容本身，不要任何解释，不要使用 Markdown 代码围栏。'
-].join('\n')
-
-const PAGE_SIZE_PATTERN = /<!--\s*page-size:\s*(\d+)\s*x\s*(\d+)\s*-->/i
-const FILE_MARKER_PATTERN = /<!--\s*file:\s*([^>\r\n]+?)\s*-->/g
-const SCRIPT_CLOSE = '<\x2fscript>'
-
 const SIZE_KINDS: MockPageSizeKind[] = ['desktop', 'tablet', 'phone']
+const MAX_ACTIVITY_EVENTS = 8
+
+interface AgentActivity {
+  id: number
+  label: string
+  done: boolean
+}
 
 const { ai } = useI18n()
 const store = useEditorStore()
@@ -67,6 +62,16 @@ const exporting = ref(false)
 const errorMsg = ref('')
 const streamedText = ref('')
 const selectedFile = ref('')
+const reasoningText = ref('')
+const reasoningOpen = ref(true)
+const elapsedMs = ref(0)
+const fullscreen = ref(false)
+const activity = ref<AgentActivity[]>([])
+const shareURL = ref('')
+const sharePort = ref(0)
+const sharing = ref(false)
+const shareCopied = ref(false)
+const shareBusy = ref(false)
 
 const { voiceState, voiceError, handleVoiceButton } = useVoiceInput(prompt)
 
@@ -139,6 +144,23 @@ const innerStyle = computed<Record<string, string>>((): Record<string, string> =
   }
 })
 
+const elapsedLabel = computed<string>(() => {
+  const seconds = elapsedMs.value / 1000
+  if (seconds >= 60) {
+    const minutes = Math.floor(seconds / 60)
+    return `${minutes}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
+  }
+  return `${seconds.toFixed(1)}s`
+})
+
+const activityLabel = computed<string>(() => {
+  const events = activity.value
+  if (events.length === 0) return ''
+  const last = events[events.length - 1]
+  if (!last) return ''
+  return last.done ? `${last.label} ✓` : `${last.label} …`
+})
+
 const messagesRef = ref<HTMLElement | null>(null)
 watch(
   () => page.value?.messages.length,
@@ -148,6 +170,26 @@ watch(
     if (el) el.scrollTop = el.scrollHeight
   }
 )
+
+let activitySeq = 0
+
+function pushActivity(label: string): void {
+  activity.value.push({ id: ++activitySeq, label, done: false })
+  if (activity.value.length > MAX_ACTIVITY_EVENTS) {
+    activity.value.splice(0, activity.value.length - MAX_ACTIVITY_EVENTS)
+  }
+}
+
+function finishActivity(ok: boolean): void {
+  for (let index = activity.value.length - 1; index >= 0; index--) {
+    const event = activity.value[index]
+    if (event && !event.done) {
+      event.done = true
+      if (!ok) event.label = `${event.label} ✗`
+      break
+    }
+  }
+}
 
 function sizeKindLabel(kind: MockPageSizeKind): string {
   if (kind === 'tablet') return ai.value.mockPageSizeTablet
@@ -175,69 +217,13 @@ function handleModelChange(event: Event) {
   setModelRoleAssignment('design', profileId)
 }
 
-function projectPath(target: string): string {
-  return target.trim().replace(/^\.?\//, '')
-}
+let generateTimer: ReturnType<typeof setInterval> | undefined
 
-function stripFences(text: string): string {
-  let t = text.trim()
-  const fence = t.match(/```(?:html)?\s*([\s\S]*?)```/i)
-  if (fence) t = (fence[1] ?? '').trim()
-  return t
-}
-
-function extractHTML(text: string): string {
-  const t = stripFences(text)
-  const lower = t.toLowerCase()
-  const doctypeIdx = lower.indexOf('<!doctype')
-  const htmlIdx = lower.indexOf('<html')
-  const start = doctypeIdx !== -1 ? doctypeIdx : htmlIdx
-  if (start > 0) return t.slice(start)
-  if (start === -1 && !/<[a-z][\s\S]*>/i.test(t)) return ''
-  return t
-}
-
-function parseProjectFiles(text: string): Record<string, string> {
-  const files: Record<string, string> = {}
-  const source = stripFences(text)
-  const markers = [...source.matchAll(FILE_MARKER_PATTERN)]
-  for (let index = 0; index < markers.length; index++) {
-    const marker = markers[index]
-    if (!marker || marker.index === undefined) continue
-    const path = projectPath(marker[1] ?? '')
-    if (!path) continue
-    const start = marker.index + marker[0].length
-    const next = markers[index + 1]
-    const end = next && next.index !== undefined ? next.index : source.length
-    const content = source.slice(start, end).trim()
-    if (content) files[path] = content
+function stopTimer(): void {
+  if (generateTimer !== undefined) {
+    clearInterval(generateTimer)
+    generateTimer = undefined
   }
-  return files
-}
-
-function composePreview(files: Record<string, string>): string {
-  let html = files['index.html']
-  if (html === undefined) {
-    const fallback = Object.keys(files).find((name) => name.endsWith('.html'))
-    html = fallback === undefined ? '' : (files[fallback] ?? '')
-  }
-  if (!html) return ''
-  html = html.replace(/<link\b[^>]*href=["']([^"']+)["'][^>]*>/gi, (tag, href: string) => {
-    const css = files[projectPath(href)]
-    return css === undefined ? tag : `<style>\n${css}\n</style>`
-  })
-  html = html.replace(
-    /<script\b[^>]*src=["']([^"']+)["'][^>]*>\s*<\/script>/gi,
-    (tag, src: string) => {
-      const js = files[projectPath(src)]
-      return js === undefined ? tag : `<script>\n${js}\n${SCRIPT_CLOSE}`
-    }
-  )
-  return html
-}
-
-function clampSize(value: number): number {
-  return Math.min(2560, Math.max(320, Math.round(value)))
 }
 
 async function generate() {
@@ -254,54 +240,79 @@ async function generate() {
   state.messages.push({ role: 'user', text })
   prompt.value = ''
   streamedText.value = ''
-  view.value = 'code'
+  reasoningText.value = ''
+  activity.value = []
+  elapsedMs.value = 0
+  const startedAt = performance.now()
+  stopTimer()
+  generateTimer = setInterval(() => {
+    elapsedMs.value = performance.now() - startedAt
+  }, 100)
+  const pendingFiles: Record<string, string> = { ...state.files }
   try {
-    const userContent = hasPage.value
-      ? `这是当前项目的完整源代码：\n\n${currentSource.value}\n\n请按以下要求修改这个项目，按原格式返回修改后的全部文件。\n${text}`
-      : text
-    const stream = streamText({
+    const result = await runMockAgent({
       model: runtime.model,
-      system: SYSTEM_PROMPT,
-      prompt: userContent,
-      maxOutputTokens: 16000
+      providerID: runtime.role.connection.providerID,
+      reasoningEffort: runtime.role.profile.reasoningEffort ?? '',
+      prompt: text,
+      hasProject: hasPage.value,
+      currentSource: currentSource.value,
+      handlers: {
+        setCanvasSize: (width, height) => {
+          state.width = clampProjectSize(width)
+          state.height = clampProjectSize(height)
+        },
+        writeProjectFile: (path, content) => {
+          pendingFiles[path] = content
+          state.files = { ...pendingFiles }
+          const composed = composePreview(state.files)
+          if (composed) state.html = composed
+        }
+      },
+      onUpdate: {
+        onTextDelta: (chunk) => {
+          streamedText.value += chunk
+        },
+        onReasoningDelta: (chunk) => {
+          reasoningText.value += chunk
+        },
+        onToolStart: (_name, label) => pushActivity(label),
+        onToolDone: (_name, _label, ok) => finishActivity(ok)
+      }
     })
-    let accumulated = ''
-    for await (const chunk of stream.textStream) {
-      accumulated += chunk
-      streamedText.value = accumulated
-    }
-    const sizeMatch = accumulated.match(PAGE_SIZE_PATTERN)
-    const parsedFiles = parseProjectFiles(accumulated)
-    if (Object.keys(parsedFiles).length > 0) {
-      const composed = composePreview(parsedFiles)
-      if (!composed) {
-        errorMsg.value = ai.value.htmlPageNoHtml
-        state.messages.push({ role: 'assistant', text: ai.value.htmlPageNoHtml })
-        return
+    if (result.filesWritten === 0) {
+      const parsedFiles = parseProjectFiles(result.fullText)
+      if (Object.keys(parsedFiles).length > 0) {
+        const composed = composePreview(parsedFiles)
+        if (!composed) {
+          errorMsg.value = ai.value.htmlPageNoHtml
+          state.messages.push({ role: 'assistant', text: ai.value.htmlPageNoHtml })
+          return
+        }
+        state.files = parsedFiles
+        state.html = composed
+      } else {
+        const single = extractHTML(result.fullText)
+        if (!single) {
+          errorMsg.value = ai.value.htmlPageNoHtml
+          state.messages.push({ role: 'assistant', text: ai.value.htmlPageNoHtml })
+          return
+        }
+        state.files = {}
+        state.html = single
       }
-      state.files = parsedFiles
-      state.html = composed
-    } else {
-      const single = extractHTML(accumulated)
-      if (!single) {
-        errorMsg.value = ai.value.htmlPageNoHtml
-        state.messages.push({ role: 'assistant', text: ai.value.htmlPageNoHtml })
-        return
-      }
-      state.files = {}
-      state.html = single
-    }
-    if (sizeMatch) {
-      state.width = clampSize(Number(sizeMatch[1]))
-      state.height = clampSize(Number(sizeMatch[2]))
     }
     view.value = 'preview'
-    state.messages.push({ role: 'assistant', text: ai.value.mockPageAssistantDone })
+    state.messages.push({
+      role: 'assistant',
+      text: result.summary || ai.value.mockPageAssistantDone
+    })
   } catch (error) {
     console.warn('mock page generation failed', error)
     errorMsg.value = ai.value.htmlPageFailed
     state.messages.push({ role: 'assistant', text: ai.value.htmlPageFailed })
   } finally {
+    stopTimer()
     generating.value = false
   }
 }
@@ -329,6 +340,90 @@ async function downloadProject() {
     exporting.value = false
   }
 }
+
+async function startShare() {
+  const state = page.value
+  if (!state?.html || shareBusy.value) return
+  if (!IS_TAURI) {
+    errorMsg.value = ai.value.mockPageShareDesktopOnly
+    return
+  }
+  shareBusy.value = true
+  try {
+    const { invoke } = await import('@tauri-apps/api/core')
+    const files = [
+      { path: 'index.html', content: state.html },
+      ...Object.entries(projectFiles.value).map(([path, content]) => ({ path, content }))
+    ]
+    const info = await invoke<{ url: string; port: number }>('mock_share_publish', {
+      files,
+      entry: 'index.html'
+    })
+    shareURL.value = info.url
+    sharePort.value = info.port
+    sharing.value = true
+    shareCopied.value = false
+  } catch (error) {
+    console.warn('mock page share failed', error)
+    errorMsg.value = ai.value.mockPageShareFailed
+  } finally {
+    shareBusy.value = false
+  }
+}
+
+async function stopShare() {
+  shareBusy.value = true
+  try {
+    if (IS_TAURI) {
+      const { invoke } = await import('@tauri-apps/api/core')
+      await invoke('mock_share_stop')
+    }
+  } catch (error) {
+    console.warn('mock page share stop failed', error)
+  } finally {
+    sharing.value = false
+    shareURL.value = ''
+    sharePort.value = 0
+    shareBusy.value = false
+  }
+}
+
+async function copyShareURL() {
+  if (!shareURL.value) return
+  try {
+    await navigator.clipboard.writeText(shareURL.value)
+    shareCopied.value = true
+    setTimeout(() => {
+      shareCopied.value = false
+    }, 2000)
+  } catch (error) {
+    console.warn('copy share url failed', error)
+  }
+}
+
+function toggleFullscreen() {
+  fullscreen.value = !fullscreen.value
+}
+
+function handleWindowKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && fullscreen.value) fullscreen.value = false
+}
+
+useEventListener(window, 'keydown', handleWindowKeydown)
+
+onBeforeUnmount(() => {
+  stopTimer()
+  if (sharing.value && IS_TAURI) {
+    void (async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core')
+        await invoke('mock_share_stop')
+      } catch (error) {
+        console.warn('mock page share stop on unmount failed', error)
+      }
+    })()
+  }
+})
 
 function handlePromptKeydown(event: KeyboardEvent) {
   if (event.code !== 'Enter' || event.shiftKey || event.isComposing) return
@@ -376,10 +471,12 @@ function handlePromptKeydown(event: KeyboardEvent) {
           </div>
           <div v-if="generating" class="mb-2 flex justify-start">
             <div
-              class="rounded-lg bg-surface/5 px-3 py-2 text-xs text-muted"
+              class="flex items-center gap-2 rounded-lg bg-surface/5 px-3 py-2 text-xs text-muted"
               data-test-id="mock-page-generating"
             >
-              {{ ai.htmlPageGenerating }} · {{ streamedText.length }}
+              <span class="mock-breathe inline-block size-1.5 rounded-full bg-accent"></span>
+              <span>{{ ai.htmlPageGenerating }}</span>
+              <span class="tabular-nums" data-test-id="mock-page-elapsed">{{ elapsedLabel }}</span>
             </div>
           </div>
         </template>
@@ -396,7 +493,10 @@ function handlePromptKeydown(event: KeyboardEvent) {
           <template v-else-if="voiceState === 'recording'">{{ ai.voiceListening }}</template>
           <template v-else-if="voiceState === 'transcribing'">{{ ai.voiceTranscribing }}</template>
           <template v-else-if="voiceState === 'polishing'">{{ ai.voicePolishing }}</template>
-          <template v-else>{{ ai.htmlPageGenerating }} · {{ streamedText.length }}</template>
+          <template v-else
+            >{{ ai.htmlPageGenerating }} · {{ elapsedLabel }} ·
+            {{ streamedText.length }}</template
+          >
         </div>
         <div class="flex items-end gap-2">
           <textarea
@@ -439,7 +539,10 @@ function handlePromptKeydown(event: KeyboardEvent) {
       </div>
     </div>
 
-    <div class="flex min-w-0 flex-1 flex-col bg-[#141518]">
+    <div
+      class="flex min-w-0 flex-col bg-[#141518]"
+      :class="fullscreen ? 'fixed inset-0 z-50' : 'flex-1'"
+    >
       <div class="flex h-10 shrink-0 items-center gap-2 border-b border-white/10 px-3">
         <div class="flex rounded bg-black/30 p-0.5">
           <button
@@ -489,6 +592,52 @@ function handlePromptKeydown(event: KeyboardEvent) {
           {{ page?.width ?? 0 }} × {{ page?.height ?? 0 }}
         </span>
         <div class="flex-1" />
+        <template v-if="sharing">
+          <span
+            class="max-w-44 truncate font-mono text-[10px] text-muted"
+            :title="shareURL"
+            data-test-id="mock-page-share-url"
+          >
+            {{ shareURL }}
+          </span>
+          <IconButton
+            :label="shareCopied ? ai.mockPageShareCopied : ai.mockPageShareLink"
+            size="sm"
+            data-test-id="mock-page-share-copy"
+            @click="copyShareURL"
+          >
+            <icon-lucide-check v-if="shareCopied" class="size-3 text-green-400" />
+            <icon-lucide-copy v-else class="size-3" />
+          </IconButton>
+          <AppButton
+            size="xs"
+            variant="outline"
+            data-test-id="mock-page-share-stop"
+            :disabled="shareBusy"
+            @click="stopShare"
+          >
+            {{ ai.mockPageShareStop }}
+          </AppButton>
+        </template>
+        <AppButton
+          v-else
+          size="xs"
+          variant="outline"
+          data-test-id="mock-page-share"
+          :disabled="!hasPage || shareBusy"
+          @click="startShare"
+        >
+          {{ ai.mockPageShare }}
+        </AppButton>
+        <IconButton
+          :label="fullscreen ? ai.mockPageExitFullscreen : ai.mockPageFullscreen"
+          size="sm"
+          data-test-id="mock-page-fullscreen-toggle"
+          @click="toggleFullscreen"
+        >
+          <icon-lucide-minimize-2 v-if="fullscreen" class="size-3.5" />
+          <icon-lucide-maximize-2 v-else class="size-3.5" />
+        </IconButton>
         <select
           :value="aiModelSettings.assignments.design"
           :disabled="generating"
@@ -514,7 +663,7 @@ function handlePromptKeydown(event: KeyboardEvent) {
 
       <div
         ref="stageRef"
-        class="flex min-h-0 flex-1 items-center justify-center overflow-hidden"
+        class="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden"
         data-test-id="mock-page-stage"
       >
         <div v-if="view === 'preview'" :style="frameStyle" class="relative shrink-0">
@@ -589,7 +738,68 @@ function handlePromptKeydown(event: KeyboardEvent) {
               >{{ generating ? streamedText : activeFileContent }}</pre>
           </div>
         </div>
+        <div
+          v-if="generating"
+          class="pointer-events-none absolute inset-x-0 top-3 z-10 flex flex-col items-center gap-2 px-4"
+          data-test-id="mock-page-gen-overlay"
+        >
+          <div
+            class="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-accent/40 bg-[#1a1c20]/95 px-4 py-1.5 shadow-lg"
+            data-test-id="mock-page-gen-pill"
+          >
+            <span class="mock-breathe inline-block size-2 rounded-full bg-accent"></span>
+            <span class="text-xs text-surface">{{ ai.htmlPageGenerating }}</span>
+            <span class="text-[10px] text-muted tabular-nums" data-test-id="mock-page-elapsed">{{
+              elapsedLabel
+            }}</span>
+            <span class="h-3 w-px bg-white/10"></span>
+            <span
+              class="max-w-56 truncate text-[10px] text-muted"
+              data-test-id="mock-page-activity"
+              >{{ activityLabel }}</span
+            >
+          </div>
+          <div
+            v-if="reasoningText"
+            class="pointer-events-auto w-full max-w-md overflow-hidden rounded-lg border border-white/10 bg-[#1a1c20]/95 shadow-lg"
+            data-test-id="mock-page-reasoning"
+          >
+            <button
+              type="button"
+              class="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-[10px] text-muted"
+              data-test-id="mock-page-reasoning-toggle"
+              @click="reasoningOpen = !reasoningOpen"
+            >
+              <icon-lucide-brain class="size-3" />
+              <span>{{ ai.mockPageThinking }}</span>
+              <span class="ml-auto">{{ reasoningOpen ? '−' : '+' }}</span>
+            </button>
+            <pre
+              v-if="reasoningOpen"
+              class="max-h-40 overflow-y-auto border-t border-white/10 px-3 py-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
+              data-test-id="mock-page-reasoning-text"
+              >{{ reasoningText }}</pre>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.mock-breathe {
+  animation: mock-breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes mock-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+}
+</style>

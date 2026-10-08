@@ -160,5 +160,14 @@
   "mockPageSizeTablet": "Tablet",
   "mockPageSizePhone": "Telefon",
   "mockPageAssistantDone": "Gotowe — strona po prawej została zaktualizowana.",
-  "mockPageCodeReadonly": "Kod jest tylko do odczytu. Poproś AI o zmiany na czacie."
+  "mockPageCodeReadonly": "Kod jest tylko do odczytu. Poproś AI o zmiany na czacie.",
+  "mockPageThinking": "Proces myślenia",
+  "mockPageFullscreen": "Podgląd na pełnym ekranie",
+  "mockPageExitFullscreen": "Zakończ pełny ekran",
+  "mockPageShare": "Udostępnij",
+  "mockPageShareLink": "Link do udostępniania",
+  "mockPageShareCopied": "Link skopiowany",
+  "mockPageShareStop": "Zatrzymaj udostępnianie",
+  "mockPageShareFailed": "Nie udało się rozpocząć udostępniania. Spróbuj ponownie.",
+  "mockPageShareDesktopOnly": "Udostępnianie jest dostępne tylko w aplikacji komputerowej."
 }

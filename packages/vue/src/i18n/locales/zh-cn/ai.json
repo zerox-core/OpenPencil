@@ -191,5 +191,14 @@
   "mockPageSizeTablet": "平板",
   "mockPageSizePhone": "手机",
   "mockPageAssistantDone": "已完成——右侧页面已更新。",
-  "mockPageCodeReadonly": "代码为只读，需要修改请在对话中告诉 AI。"
+  "mockPageCodeReadonly": "代码为只读，需要修改请在对话中告诉 AI。",
+  "mockPageThinking": "思考过程",
+  "mockPageFullscreen": "全屏预览",
+  "mockPageExitFullscreen": "退出全屏",
+  "mockPageShare": "分享",
+  "mockPageShareLink": "分享链接",
+  "mockPageShareCopied": "已复制链接",
+  "mockPageShareStop": "停止分享",
+  "mockPageShareFailed": "启动分享服务失败，请重试。",
+  "mockPageShareDesktopOnly": "分享功能仅在桌面版应用中可用。"
 }

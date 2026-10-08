@@ -5,6 +5,7 @@ mod fonts;
 mod http;
 mod menu;
 mod menu_events;
+mod mock_share;
 #[cfg(target_os = "macos")]
 mod window;
 
@@ -18,6 +19,7 @@ use fonts::{list_system_fonts, load_system_font};
 use http::proxy_http_request;
 use menu::{install_app_menu, native_menu_checked, set_native_menu_checked};
 use menu_events::handle_menu_event;
+use mock_share::{mock_share_publish, mock_share_stop};
 use std::{
     path::{Path, PathBuf},
     sync::Mutex,
@@ -301,7 +303,9 @@ pub fn run() {
             set_recent_files,
             native_menu_checked,
             set_native_menu_checked,
-            take_pending_open
+            take_pending_open,
+            mock_share_publish,
+            mock_share_stop
         ])
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())

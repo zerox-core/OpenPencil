@@ -208,7 +208,16 @@ export const aiMessageDefaults = {
   mockPageSizeTablet: 'Tablet',
   mockPageSizePhone: 'Phone',
   mockPageAssistantDone: 'Done — the page on the right has been updated.',
-  mockPageCodeReadonly: 'Code is read-only. Ask the AI in the chat to make changes.'
+  mockPageCodeReadonly: 'Code is read-only. Ask the AI in the chat to make changes.',
+  mockPageThinking: 'Thinking',
+  mockPageFullscreen: 'Fullscreen preview',
+  mockPageExitFullscreen: 'Exit fullscreen',
+  mockPageShare: 'Share',
+  mockPageShareLink: 'Share link',
+  mockPageShareCopied: 'Link copied',
+  mockPageShareStop: 'Stop sharing',
+  mockPageShareFailed: 'Failed to start sharing. Try again.',
+  mockPageShareDesktopOnly: 'Sharing is only available in the desktop app.'
 } as const
 
 export const aiMessages = i18n('ai', aiMessageDefaults)

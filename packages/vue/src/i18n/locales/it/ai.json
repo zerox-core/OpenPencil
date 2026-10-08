@@ -160,5 +160,14 @@
   "mockPageSizeTablet": "Tablet",
   "mockPageSizePhone": "Telefono",
   "mockPageAssistantDone": "Fatto — la pagina a destra è stata aggiornata.",
-  "mockPageCodeReadonly": "Il codice è di sola lettura. Chiedi le modifiche all'IA nella chat."
+  "mockPageCodeReadonly": "Il codice è di sola lettura. Chiedi le modifiche all'IA nella chat.",
+  "mockPageThinking": "Ragionamento",
+  "mockPageFullscreen": "Anteprima a schermo intero",
+  "mockPageExitFullscreen": "Esci da schermo intero",
+  "mockPageShare": "Condividi",
+  "mockPageShareLink": "Link di condivisione",
+  "mockPageShareCopied": "Link copiato",
+  "mockPageShareStop": "Interrompi condivisione",
+  "mockPageShareFailed": "Impossibile avviare la condivisione. Riprova.",
+  "mockPageShareDesktopOnly": "La condivisione è disponibile solo nell'app desktop."
 }

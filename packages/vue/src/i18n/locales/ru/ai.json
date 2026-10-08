@@ -160,5 +160,14 @@
   "mockPageSizeTablet": "Планшет",
   "mockPageSizePhone": "Телефон",
   "mockPageAssistantDone": "Готово — страница справа обновлена.",
-  "mockPageCodeReadonly": "Код доступен только для чтения. Попросите ИИ внести изменения в чате."
+  "mockPageCodeReadonly": "Код доступен только для чтения. Попросите ИИ внести изменения в чате.",
+  "mockPageThinking": "Процесс размышления",
+  "mockPageFullscreen": "Полноэкранный предпросмотр",
+  "mockPageExitFullscreen": "Выйти из полноэкранного режима",
+  "mockPageShare": "Поделиться",
+  "mockPageShareLink": "Ссылка для совместного доступа",
+  "mockPageShareCopied": "Ссылка скопирована",
+  "mockPageShareStop": "Остановить общий доступ",
+  "mockPageShareFailed": "Не удалось запустить общий доступ. Попробуйте ещё раз.",
+  "mockPageShareDesktopOnly": "Общий доступ доступен только в настольном приложении."
 }

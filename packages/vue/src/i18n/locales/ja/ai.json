@@ -160,5 +160,14 @@
   "mockPageSizeTablet": "タブレット",
   "mockPageSizePhone": "スマートフォン",
   "mockPageAssistantDone": "完了 — 右側のページが更新されました。",
-  "mockPageCodeReadonly": "コードは読み取り専用です。変更はチャットで AI に依頼してください。"
+  "mockPageCodeReadonly": "コードは読み取り専用です。変更はチャットで AI に依頼してください。",
+  "mockPageThinking": "思考プロセス",
+  "mockPageFullscreen": "全画面プレビュー",
+  "mockPageExitFullscreen": "全画面を終了",
+  "mockPageShare": "共有",
+  "mockPageShareLink": "共有リンク",
+  "mockPageShareCopied": "リンクをコピーしました",
+  "mockPageShareStop": "共有を停止",
+  "mockPageShareFailed": "共有の開始に失敗しました。再試行してください。",
+  "mockPageShareDesktopOnly": "共有はデスクトップアプリでのみ利用できます。"
 }
