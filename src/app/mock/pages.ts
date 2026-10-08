@@ -150,3 +150,8 @@ export function ensureMockPage(mockId: string): MockPageState {
   registry[mockId] = created
   return created
 }
+
+/** List all registered mock pages (used by similar-design search). */
+export function listMockPages(): Array<{ id: string; state: MockPageState }> {
+  return Object.entries(registry).map(([id, state]) => ({ id, state }))
+}

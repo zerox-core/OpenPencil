@@ -223,7 +223,9 @@ export const aiMessageDefaults = {
   mockPageShareDesktopOnly: 'Sharing is only available in the desktop app.',
   mockPageStepUnderstand: 'Understanding requirements',
   mockPageStepPlan: 'Planning and breaking down steps',
-  mockPageStepFinish: 'Finishing up'
+  mockPageStepFinish: 'Finishing up',
+  mockPagePhaseBuild: 'Building and verifying',
+  mockPagePlanTitle: 'Build plan'
 } as const
 
 export const aiMessages = i18n('ai', aiMessageDefaults)

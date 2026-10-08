@@ -173,6 +173,8 @@
   "mockPageStepUnderstand": "Anforderungen verstehen",
   "mockPageStepPlan": "Planung und Aufteilung in Schritte",
   "mockPageStepFinish": "Fertigstellung",
+  "mockPagePhaseBuild": "Aufbau und Prüfung",
+  "mockPagePlanTitle": "Aufbauplan",
   "mockPageViewDevice": "Gerät",
   "mockPageViewFlat": "Flach",
   "mockPageHotLoading": "Wird geladen…"

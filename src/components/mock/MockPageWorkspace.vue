@@ -17,6 +17,7 @@ import { saveExportedFile } from '@/app/document/export/files'
 import { downloadBlob } from '@/app/document/io/browser'
 import { useEditorStore } from '@/app/editor/active-store'
 import { runMockAgent } from '@/app/mock/agent'
+import type { MockPipelineSnapshot } from '@/app/mock/pipeline'
 import { MOCK_PAGE_SIZES, ensureMockPage, getMockPageId, mockPageState } from '@/app/mock/pages'
 import {
   clampProjectSize,
@@ -68,6 +69,7 @@ const reasoningOpen = ref(true)
 const elapsedMs = ref(0)
 const fullscreen = ref(false)
 const activity = ref<AgentActivity[]>([])
+const planSteps = ref<MockPipelineSnapshot['plan']>([])
 const shareURL = ref('')
 const sharePort = ref(0)
 const sharing = ref(false)
@@ -203,18 +205,12 @@ function finishActivity(ok: boolean): void {
 }
 
 let contentStarted = false
-let planStepPushed = false
+let lastPhase = ''
 
 function noteContentStarted(): void {
   if (contentStarted) return
   contentStarted = true
   finishActivity(true)
-}
-
-function notePlanStep(): void {
-  if (planStepPushed) return
-  planStepPushed = true
-  pushActivity(ai.value.mockPageStepPlan)
 }
 
 function sizeKindLabel(kind: MockPageSizeKind): string {
@@ -269,7 +265,8 @@ async function generate() {
   reasoningText.value = ''
   activity.value = []
   contentStarted = false
-  planStepPushed = false
+  lastPhase = 'analyze'
+  planSteps.value = []
   pushActivity(ai.value.mockPageStepUnderstand)
   elapsedMs.value = 0
   const startedAt = performance.now()
@@ -286,6 +283,8 @@ async function generate() {
       prompt: text,
       hasProject: hasPage.value,
       currentSource: currentSource.value,
+      initialFiles: { ...state.files },
+      mockId: getMockPageId(pageNode.value) ?? undefined,
       handlers: {
         setCanvasSize: (width, height) => {
           state.width = clampProjectSize(width)
@@ -301,12 +300,10 @@ async function generate() {
       onUpdate: {
         onTextDelta: (chunk) => {
           noteContentStarted()
-          notePlanStep()
           streamedText.value += chunk
         },
         onReasoningDelta: (chunk) => {
           noteContentStarted()
-          notePlanStep()
           reasoningText.value += chunk
         },
         onToolStart: (_name, label) => {
@@ -314,7 +311,15 @@ async function generate() {
           finishActivity(true)
           pushActivity(label)
         },
-        onToolDone: (_name, _label, ok) => finishActivity(ok)
+        onToolDone: (_name, _label, ok) => finishActivity(ok),
+        onPipelineChange: (snapshot) => {
+          planSteps.value = snapshot.plan.map((step) => ({ ...step }))
+          if (snapshot.phase !== lastPhase) {
+            lastPhase = snapshot.phase
+            if (snapshot.phase === 'plan') pushActivity(ai.value.mockPageStepPlan)
+            else if (snapshot.phase === 'build') pushActivity(ai.value.mockPagePhaseBuild)
+          }
+        }
       }
     })
     if (result.filesWritten === 0) {
@@ -888,6 +893,28 @@ function handlePromptKeydown(event: KeyboardEvent) {
               <span class="mock-breathe inline-block size-1.5 rounded-full bg-accent"></span>
               <span>{{ ai.htmlPageGenerating }}</span>
               <span class="tabular-nums">{{ elapsedLabel }}</span>
+            </div>
+            <div
+              v-if="planSteps.length > 0"
+              class="border-b border-white/10 px-3 py-2"
+              data-test-id="mock-page-plan"
+            >
+              <div class="mb-1 text-[10px] font-semibold text-muted">{{ ai.mockPagePlanTitle }}</div>
+              <div
+                v-for="(step, index) in planSteps"
+                :key="index"
+                class="flex items-center gap-2 py-0.5 text-[11px]"
+                :class="step.status === 'done' ? 'text-muted' : 'text-surface'"
+                data-test-id="mock-page-plan-step"
+                :data-status="step.status"
+              >
+                <icon-lucide-check v-if="step.status === 'done'" class="size-3 shrink-0 text-accent" />
+                <span
+                  v-else
+                  class="mock-breathe inline-block size-1.5 shrink-0 rounded-full bg-accent"
+                ></span>
+                <span class="truncate">{{ step.title }}</span>
+              </div>
             </div>
             <div class="max-h-56 overflow-y-auto px-3 py-2" data-test-id="mock-page-build-steps">
               <div

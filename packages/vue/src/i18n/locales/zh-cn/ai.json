@@ -204,6 +204,8 @@
   "mockPageStepUnderstand": "理解需求",
   "mockPageStepPlan": "规划与拆分步骤",
   "mockPageStepFinish": "完成组装",
+  "mockPagePhaseBuild": "搭建与验证",
+  "mockPagePlanTitle": "搭建计划",
   "mockPageViewDevice": "设备",
   "mockPageViewFlat": "平铺",
   "mockPageHotLoading": "正在加载…"
