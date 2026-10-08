@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useElementSize, useEventListener } from '@vueuse/core'
+import { useElementSize, useEventListener, useLocalStorage } from '@vueuse/core'
 import { strToU8, zipSync } from 'fflate'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
@@ -56,6 +56,8 @@ watch(
 
 const prompt = ref('')
 const view = ref<'preview' | 'code'>('preview')
+
+const viewMode = useLocalStorage<'device' | 'flat'>('open-pencil:mock-page-view-mode', 'device')
 const generating = ref(false)
 const exporting = ref(false)
 const errorMsg = ref('')
@@ -612,6 +614,7 @@ function handlePromptKeydown(event: KeyboardEvent) {
           </button>
         </div>
         <div class="mx-1 h-4 w-px bg-white/10" />
+        <template v-if="viewMode === 'device'">
         <button
           v-for="kind in SIZE_KINDS"
           :key="kind"
@@ -630,6 +633,31 @@ function handlePromptKeydown(event: KeyboardEvent) {
         <span class="text-[10px] text-muted tabular-nums" data-test-id="mock-page-size-label">
           {{ page?.width ?? 0 }} × {{ page?.height ?? 0 }}
         </span>
+        </template>
+        <button
+          type="button"
+          class="rounded px-2 py-1 text-[10px]"
+          :class="
+            viewMode === 'device' ? 'bg-white/10 font-semibold text-surface' : 'text-muted hover:text-surface'
+          "
+          :title="ai.mockPageViewDevice"
+          data-test-id="mock-page-view-device"
+          @click="viewMode = 'device'"
+        >
+          <icon-lucide-monitor class="size-3" />
+        </button>
+        <button
+          type="button"
+          class="rounded px-2 py-1 text-[10px]"
+          :class="
+            viewMode === 'flat' ? 'bg-white/10 font-semibold text-surface' : 'text-muted hover:text-surface'
+          "
+          :title="ai.mockPageViewFlat"
+          data-test-id="mock-page-view-flat"
+          @click="viewMode = 'flat'"
+        >
+          <icon-lucide-scan class="size-3" />
+        </button>
         <div class="flex-1" />
         <template v-if="sharing">
           <span
@@ -705,7 +733,32 @@ function handlePromptKeydown(event: KeyboardEvent) {
         class="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden"
         data-test-id="mock-page-stage"
       >
-        <div v-if="view === 'preview'" :style="frameStyle" class="relative shrink-0">
+        <div
+          v-if="view === 'preview' && viewMode === 'flat'"
+          class="relative size-full"
+          data-test-id="mock-page-flat-stage"
+        >
+          <iframe
+            v-if="hasPage"
+            sandbox="allow-scripts"
+            :srcdoc="page?.html ?? ''"
+            title="mock-page-preview"
+            class="size-full border-0 bg-white"
+            data-test-id="mock-page-preview-flat-frame"
+          ></iframe>
+          <div
+            v-else
+            class="flex size-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-white/15 bg-black/20 p-6 text-center"
+            data-test-id="mock-page-empty"
+          >
+            <icon-lucide-globe class="size-8 text-muted/50" />
+            <p class="text-xs text-muted">{{ ai.mockPageEmptyTitle }}</p>
+            <p class="max-w-64 text-[10px] leading-relaxed text-muted/60">
+              {{ ai.mockPageEmptyHint }}
+            </p>
+          </div>
+        </div>
+        <div v-else-if="view === 'preview'" :style="frameStyle" class="relative shrink-0">
           <div
             :style="innerStyle"
             class="absolute top-0 left-0 flex flex-col overflow-hidden rounded-lg shadow-[0_8px_30px_rgb(0_0_0/0.5)]"

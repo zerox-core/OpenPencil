@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { SplitterGroup, SplitterPanel, SplitterResizeHandle } from 'reka-ui'
 import { tv } from 'tailwind-variants'
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import { formatShortcut, useI18n, useViewportKind } from '@open-pencil/vue'
 
@@ -27,7 +27,7 @@ import splitterTheme from '@/theme/splitter'
 
 const showChrome = appRuntimeConfig.showChrome
 const store = useEditorStore()
-const { editor } = useI18n()
+const { editor, ai } = useI18n()
 const { isMobile } = useViewportKind()
 const initialEditorLayout = loadEditorLayout()
 const horizontalSplitterStyles = tv(splitterTheme)({ direction: 'horizontal' })
@@ -35,6 +35,40 @@ const horizontalSplitterStyles = tv(splitterTheme)({ direction: 'horizontal' })
 const mockMode = computed(() => {
   void store.state.sceneVersion
   return isMockPage(store.graph.getNode(store.state.currentPageId))
+})
+
+const mockWorkspaceReady = ref(false)
+const mockHotLoaded = ref(false)
+let mockHotTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(
+  mockMode,
+  (isMock) => {
+    if (mockHotTimer) {
+      clearTimeout(mockHotTimer)
+      mockHotTimer = null
+    }
+    if (isMock) {
+      mockWorkspaceReady.value = false
+      mockHotLoaded.value = false
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          mockWorkspaceReady.value = true
+        })
+      })
+      mockHotTimer = setTimeout(() => {
+        mockHotLoaded.value = true
+      }, 900)
+    } else {
+      mockWorkspaceReady.value = false
+      mockHotLoaded.value = false
+    }
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  if (mockHotTimer) clearTimeout(mockHotTimer)
 })
 </script>
 
@@ -67,7 +101,26 @@ const mockMode = computed(() => {
       :min-size="30"
       class="flex"
     >
-      <MockPageWorkspace v-if="mockMode" />
+      <div v-if="mockMode" class="relative flex min-w-0 flex-1">
+        <MockPageWorkspace v-if="mockWorkspaceReady" />
+        <Transition name="mock-hot-fade">
+          <div
+            v-if="!mockHotLoaded"
+            class="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-[#141518]"
+            data-test-id="mock-page-hot-loading"
+          >
+            <div
+              class="mock-hot-logo flex size-10 items-center justify-center rounded-xl border border-white/10 bg-white/5"
+            >
+              <icon-lucide-layout-template class="size-5 text-accent" />
+            </div>
+            <div class="h-1 w-40 overflow-hidden rounded-full bg-white/5">
+              <div class="mock-hot-bar h-full w-1/3 rounded-full bg-accent"></div>
+            </div>
+            <p class="text-xs text-muted">{{ ai.mockPageHotLoading }}</p>
+          </div>
+        </Transition>
+      </div>
       <div v-else class="relative flex min-w-0 flex-1">
         <CanvasSplitRoot />
         <Toolbar />
@@ -84,7 +137,9 @@ const mockMode = computed(() => {
         :max-size="30"
         class="flex flex-col"
       >
-        <div class="flex shrink-0 items-center justify-between border-b border-border px-1.5 py-1.5">
+        <div
+          class="flex shrink-0 items-center justify-between border-b border-border px-1.5 py-1.5"
+        >
           <CollabPanel />
         </div>
         <PropertiesPanel />
@@ -138,3 +193,44 @@ const mockMode = computed(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.mock-hot-fade-leave-active {
+  transition: opacity 0.35s ease;
+}
+
+.mock-hot-fade-leave-to {
+  opacity: 0;
+}
+
+.mock-hot-logo {
+  animation: mock-hot-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes mock-hot-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.96);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.mock-hot-bar {
+  animation: mock-hot-sweep 1.1s ease-in-out infinite;
+}
+
+@keyframes mock-hot-sweep {
+  0% {
+    transform: translateX(-110%);
+  }
+
+  100% {
+    transform: translateX(330%);
+  }
+}
+</style>

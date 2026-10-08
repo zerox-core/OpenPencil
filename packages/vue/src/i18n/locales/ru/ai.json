@@ -172,5 +172,8 @@
   "mockPageShareDesktopOnly": "Общий доступ доступен только в настольном приложении.",
   "mockPageStepUnderstand": "Анализ требований",
   "mockPageStepPlan": "Планирование и разбиение на шаги",
-  "mockPageStepFinish": "Завершение"
+  "mockPageStepFinish": "Завершение",
+  "mockPageViewDevice": "Устройство",
+  "mockPageViewFlat": "Без рамки",
+  "mockPageHotLoading": "Загрузка…"
 }

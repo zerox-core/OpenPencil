@@ -172,5 +172,8 @@
   "mockPageShareDesktopOnly": "La condivisione è disponibile solo nell'app desktop.",
   "mockPageStepUnderstand": "Comprensione dei requisiti",
   "mockPageStepPlan": "Pianificazione e suddivisione in passaggi",
-  "mockPageStepFinish": "Completamento"
+  "mockPageStepFinish": "Completamento",
+  "mockPageViewDevice": "Dispositivo",
+  "mockPageViewFlat": "Senza cornice",
+  "mockPageHotLoading": "Caricamento…"
 }

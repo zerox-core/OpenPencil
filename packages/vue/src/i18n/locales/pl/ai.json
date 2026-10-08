@@ -172,5 +172,8 @@
   "mockPageShareDesktopOnly": "Udostępnianie jest dostępne tylko w aplikacji komputerowej.",
   "mockPageStepUnderstand": "Analiza wymagań",
   "mockPageStepPlan": "Planowanie i podział na kroki",
-  "mockPageStepFinish": "Finalizacja"
+  "mockPageStepFinish": "Finalizacja",
+  "mockPageViewDevice": "Urządzenie",
+  "mockPageViewFlat": "Płasko",
+  "mockPageHotLoading": "Ładowanie…"
 }
