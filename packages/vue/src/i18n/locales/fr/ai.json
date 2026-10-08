@@ -169,5 +169,8 @@
   "mockPageShareCopied": "Lien copié",
   "mockPageShareStop": "Arrêter le partage",
   "mockPageShareFailed": "Échec du démarrage du partage. Réessayez.",
-  "mockPageShareDesktopOnly": "Le partage n'est disponible que dans l'application de bureau."
+  "mockPageShareDesktopOnly": "Le partage n'est disponible que dans l'application de bureau.",
+  "mockPageStepUnderstand": "Compréhension de la demande",
+  "mockPageStepPlan": "Planification et découpage en étapes",
+  "mockPageStepFinish": "Finalisation"
 }

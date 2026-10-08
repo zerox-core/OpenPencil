@@ -169,5 +169,8 @@
   "mockPageShareCopied": "Link skopiowany",
   "mockPageShareStop": "Zatrzymaj udostępnianie",
   "mockPageShareFailed": "Nie udało się rozpocząć udostępniania. Spróbuj ponownie.",
-  "mockPageShareDesktopOnly": "Udostępnianie jest dostępne tylko w aplikacji komputerowej."
+  "mockPageShareDesktopOnly": "Udostępnianie jest dostępne tylko w aplikacji komputerowej.",
+  "mockPageStepUnderstand": "Analiza wymagań",
+  "mockPageStepPlan": "Planowanie i podział na kroki",
+  "mockPageStepFinish": "Finalizacja"
 }

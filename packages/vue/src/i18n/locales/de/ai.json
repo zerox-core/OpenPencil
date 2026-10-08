@@ -169,5 +169,8 @@
   "mockPageShareCopied": "Link kopiert",
   "mockPageShareStop": "Freigabe beenden",
   "mockPageShareFailed": "Freigabe konnte nicht gestartet werden. Bitte erneut versuchen.",
-  "mockPageShareDesktopOnly": "Teilen ist nur in der Desktop-App verfügbar."
+  "mockPageShareDesktopOnly": "Teilen ist nur in der Desktop-App verfügbar.",
+  "mockPageStepUnderstand": "Anforderungen verstehen",
+  "mockPageStepPlan": "Planung und Aufteilung in Schritte",
+  "mockPageStepFinish": "Fertigstellung"
 }

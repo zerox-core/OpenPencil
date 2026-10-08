@@ -169,5 +169,8 @@
   "mockPageShareCopied": "Link copiato",
   "mockPageShareStop": "Interrompi condivisione",
   "mockPageShareFailed": "Impossibile avviare la condivisione. Riprova.",
-  "mockPageShareDesktopOnly": "La condivisione è disponibile solo nell'app desktop."
+  "mockPageShareDesktopOnly": "La condivisione è disponibile solo nell'app desktop.",
+  "mockPageStepUnderstand": "Comprensione dei requisiti",
+  "mockPageStepPlan": "Pianificazione e suddivisione in passaggi",
+  "mockPageStepFinish": "Completamento"
 }

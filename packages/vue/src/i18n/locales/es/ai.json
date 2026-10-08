@@ -169,5 +169,8 @@
   "mockPageShareCopied": "Enlace copiado",
   "mockPageShareStop": "Dejar de compartir",
   "mockPageShareFailed": "No se pudo iniciar el uso compartido. Inténtalo de nuevo.",
-  "mockPageShareDesktopOnly": "Compartir solo está disponible en la aplicación de escritorio."
+  "mockPageShareDesktopOnly": "Compartir solo está disponible en la aplicación de escritorio.",
+  "mockPageStepUnderstand": "Entendiendo los requisitos",
+  "mockPageStepPlan": "Planificación y división en pasos",
+  "mockPageStepFinish": "Finalizando"
 }

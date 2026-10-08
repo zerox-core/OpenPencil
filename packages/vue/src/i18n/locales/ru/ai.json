@@ -169,5 +169,8 @@
   "mockPageShareCopied": "Ссылка скопирована",
   "mockPageShareStop": "Остановить общий доступ",
   "mockPageShareFailed": "Не удалось запустить общий доступ. Попробуйте ещё раз.",
-  "mockPageShareDesktopOnly": "Общий доступ доступен только в настольном приложении."
+  "mockPageShareDesktopOnly": "Общий доступ доступен только в настольном приложении.",
+  "mockPageStepUnderstand": "Анализ требований",
+  "mockPageStepPlan": "Планирование и разбиение на шаги",
+  "mockPageStepFinish": "Завершение"
 }

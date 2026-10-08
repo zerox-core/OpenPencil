@@ -30,7 +30,6 @@ import AppButton from '@/components/ui/button/AppButton.vue'
 import IconButton from '@/components/ui/button/IconButton.vue'
 
 const SIZE_KINDS: MockPageSizeKind[] = ['desktop', 'tablet', 'phone']
-const MAX_ACTIVITY_EVENTS = 8
 
 interface AgentActivity {
   id: number
@@ -161,6 +160,19 @@ const activityLabel = computed<string>(() => {
   return last.done ? `${last.label} ✓` : `${last.label} …`
 })
 
+const streamTail = computed<string>(() => {
+  const text = streamedText.value
+  return text.length > 240 ? text.slice(-240) : text
+})
+
+const activeStepLabel = computed<string>(() => {
+  for (let index = activity.value.length - 1; index >= 0; index--) {
+    const event = activity.value[index]
+    if (event && !event.done) return event.label
+  }
+  return ''
+})
+
 const messagesRef = ref<HTMLElement | null>(null)
 watch(
   () => page.value?.messages.length,
@@ -175,9 +187,6 @@ let activitySeq = 0
 
 function pushActivity(label: string): void {
   activity.value.push({ id: ++activitySeq, label, done: false })
-  if (activity.value.length > MAX_ACTIVITY_EVENTS) {
-    activity.value.splice(0, activity.value.length - MAX_ACTIVITY_EVENTS)
-  }
 }
 
 function finishActivity(ok: boolean): void {
@@ -189,6 +198,21 @@ function finishActivity(ok: boolean): void {
       break
     }
   }
+}
+
+let contentStarted = false
+let planStepPushed = false
+
+function noteContentStarted(): void {
+  if (contentStarted) return
+  contentStarted = true
+  finishActivity(true)
+}
+
+function notePlanStep(): void {
+  if (planStepPushed) return
+  planStepPushed = true
+  pushActivity(ai.value.mockPageStepPlan)
 }
 
 function sizeKindLabel(kind: MockPageSizeKind): string {
@@ -242,6 +266,9 @@ async function generate() {
   streamedText.value = ''
   reasoningText.value = ''
   activity.value = []
+  contentStarted = false
+  planStepPushed = false
+  pushActivity(ai.value.mockPageStepUnderstand)
   elapsedMs.value = 0
   const startedAt = performance.now()
   stopTimer()
@@ -271,12 +298,20 @@ async function generate() {
       },
       onUpdate: {
         onTextDelta: (chunk) => {
+          noteContentStarted()
+          notePlanStep()
           streamedText.value += chunk
         },
         onReasoningDelta: (chunk) => {
+          noteContentStarted()
+          notePlanStep()
           reasoningText.value += chunk
         },
-        onToolStart: (_name, label) => pushActivity(label),
+        onToolStart: (_name, label) => {
+          noteContentStarted()
+          finishActivity(true)
+          pushActivity(label)
+        },
         onToolDone: (_name, _label, ok) => finishActivity(ok)
       }
     })
@@ -303,12 +338,16 @@ async function generate() {
       }
     }
     view.value = 'preview'
+    finishActivity(true)
+    pushActivity(ai.value.mockPageStepFinish)
+    finishActivity(true)
     state.messages.push({
       role: 'assistant',
       text: result.summary || ai.value.mockPageAssistantDone
     })
   } catch (error) {
     console.warn('mock page generation failed', error)
+    finishActivity(false)
     errorMsg.value = ai.value.htmlPageFailed
     state.messages.push({ role: 'assistant', text: ai.value.htmlPageFailed })
   } finally {
@@ -781,6 +820,53 @@ function handlePromptKeydown(event: KeyboardEvent) {
               >{{ reasoningText }}</pre>
           </div>
         </div>
+        <div
+          v-if="generating"
+          class="pointer-events-none absolute inset-0 z-10"
+          data-test-id="mock-page-build-scene"
+        >
+          <div
+            class="mock-build-cursor text-accent"
+            data-test-id="mock-page-build-cursor"
+          >
+            <icon-lucide-mouse-pointer-2 class="size-5 drop-shadow" />
+          </div>
+          <div
+            class="pointer-events-auto absolute bottom-4 left-4 w-64 overflow-hidden rounded-lg border border-white/10 bg-[#14161a]/90 shadow-xl backdrop-blur"
+            data-test-id="mock-page-build-card"
+          >
+            <div
+              class="flex items-center gap-1.5 border-b border-white/10 px-3 py-2 text-[10px] font-semibold text-muted"
+            >
+              <span class="mock-breathe inline-block size-1.5 rounded-full bg-accent"></span>
+              <span>{{ ai.htmlPageGenerating }}</span>
+              <span class="tabular-nums">{{ elapsedLabel }}</span>
+            </div>
+            <div class="max-h-56 overflow-y-auto px-3 py-2" data-test-id="mock-page-build-steps">
+              <div
+                v-for="event in activity"
+                :key="event.id"
+                class="flex items-center gap-2 py-0.5 text-[11px]"
+                :class="event.done ? 'text-muted' : 'text-surface'"
+                data-test-id="mock-page-build-step"
+                :data-step-id="event.id"
+                :data-status="event.done ? 'done' : 'active'"
+              >
+                <icon-lucide-check v-if="event.done" class="size-3 shrink-0 text-accent" />
+                <span
+                  v-else
+                  class="mock-breathe inline-block size-1.5 shrink-0 rounded-full bg-accent"
+                ></span>
+                <span class="truncate">{{ event.label }}</span>
+              </div>
+            </div>
+            <div
+              class="max-h-24 overflow-y-auto border-t border-white/10 px-3 py-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
+              data-test-id="mock-page-build-status"
+              >{{ streamTail || activeStepLabel }}<span class="mock-caret"></span
+            ></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -800,6 +886,90 @@ function handlePromptKeydown(event: KeyboardEvent) {
   50% {
     opacity: 1;
     transform: scale(1.35);
+  }
+}
+
+.mock-build-cursor {
+  position: absolute;
+  top: 30%;
+  left: 20%;
+  animation: mock-cursor-roam 9s ease-in-out infinite;
+}
+
+.mock-build-cursor::after {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  width: 26px;
+  height: 26px;
+  content: '';
+  border: 2px solid currentColor;
+  border-radius: 9999px;
+  opacity: 0;
+  animation: mock-cursor-pulse 2.2s ease-out infinite;
+}
+
+@keyframes mock-cursor-roam {
+  0%,
+  10% {
+    top: 30%;
+    left: 20%;
+  }
+  22%,
+  32% {
+    top: 20%;
+    left: 66%;
+  }
+  44%,
+  54% {
+    top: 56%;
+    left: 72%;
+  }
+  66%,
+  76% {
+    top: 66%;
+    left: 34%;
+  }
+  88%,
+  100% {
+    top: 30%;
+    left: 20%;
+  }
+}
+
+@keyframes mock-cursor-pulse {
+  0% {
+    opacity: 0.85;
+    transform: scale(0.35);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+.mock-caret {
+  display: inline-block;
+  width: 7px;
+  height: 0.95em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: currentColor;
+  animation: mock-caret-blink 1.1s steps(1) infinite;
+}
+
+@keyframes mock-caret-blink {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  56%,
+  100% {
+    opacity: 0;
   }
 }
 </style>

@@ -200,5 +200,8 @@
   "mockPageShareCopied": "已复制链接",
   "mockPageShareStop": "停止分享",
   "mockPageShareFailed": "启动分享服务失败，请重试。",
-  "mockPageShareDesktopOnly": "分享功能仅在桌面版应用中可用。"
+  "mockPageShareDesktopOnly": "分享功能仅在桌面版应用中可用。",
+  "mockPageStepUnderstand": "理解需求",
+  "mockPageStepPlan": "规划与拆分步骤",
+  "mockPageStepFinish": "完成组装"
 }

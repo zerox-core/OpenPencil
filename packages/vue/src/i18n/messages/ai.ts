@@ -217,7 +217,10 @@ export const aiMessageDefaults = {
   mockPageShareCopied: 'Link copied',
   mockPageShareStop: 'Stop sharing',
   mockPageShareFailed: 'Failed to start sharing. Try again.',
-  mockPageShareDesktopOnly: 'Sharing is only available in the desktop app.'
+  mockPageShareDesktopOnly: 'Sharing is only available in the desktop app.',
+  mockPageStepUnderstand: 'Understanding requirements',
+  mockPageStepPlan: 'Planning and breaking down steps',
+  mockPageStepFinish: 'Finishing up'
 } as const
 
 export const aiMessages = i18n('ai', aiMessageDefaults)

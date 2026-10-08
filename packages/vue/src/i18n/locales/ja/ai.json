@@ -169,5 +169,8 @@
   "mockPageShareCopied": "リンクをコピーしました",
   "mockPageShareStop": "共有を停止",
   "mockPageShareFailed": "共有の開始に失敗しました。再試行してください。",
-  "mockPageShareDesktopOnly": "共有はデスクトップアプリでのみ利用できます。"
+  "mockPageShareDesktopOnly": "共有はデスクトップアプリでのみ利用できます。",
+  "mockPageStepUnderstand": "要件を理解中",
+  "mockPageStepPlan": "計画とステップの分解",
+  "mockPageStepFinish": "仕上げ中"
 }
