@@ -879,12 +879,6 @@ function handlePromptKeydown(event: KeyboardEvent) {
           data-test-id="mock-page-build-scene"
         >
           <div
-            class="mock-build-cursor text-accent"
-            data-test-id="mock-page-build-cursor"
-          >
-            <icon-lucide-mouse-pointer-2 class="size-5 drop-shadow" />
-          </div>
-          <div
             class="pointer-events-auto absolute bottom-4 left-4 w-64 overflow-hidden rounded-lg border border-white/10 bg-[#14161a]/90 shadow-xl backdrop-blur"
             data-test-id="mock-page-build-card"
           >
@@ -942,68 +936,6 @@ function handlePromptKeydown(event: KeyboardEvent) {
   }
 }
 
-.mock-build-cursor {
-  position: absolute;
-  top: 30%;
-  left: 20%;
-  animation: mock-cursor-roam 9s ease-in-out infinite;
-}
-
-.mock-build-cursor::after {
-  position: absolute;
-  top: -7px;
-  left: -7px;
-  width: 26px;
-  height: 26px;
-  content: '';
-  border: 2px solid currentColor;
-  border-radius: 9999px;
-  opacity: 0;
-  animation: mock-cursor-pulse 2.2s ease-out infinite;
-}
-
-@keyframes mock-cursor-roam {
-  0%,
-  10% {
-    top: 30%;
-    left: 20%;
-  }
-  22%,
-  32% {
-    top: 20%;
-    left: 66%;
-  }
-  44%,
-  54% {
-    top: 56%;
-    left: 72%;
-  }
-  66%,
-  76% {
-    top: 66%;
-    left: 34%;
-  }
-  88%,
-  100% {
-    top: 30%;
-    left: 20%;
-  }
-}
-
-@keyframes mock-cursor-pulse {
-  0% {
-    opacity: 0.85;
-    transform: scale(0.35);
-  }
-  70% {
-    opacity: 0;
-    transform: scale(1.5);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.5);
-  }
-}
 
 .mock-caret {
   display: inline-block;
