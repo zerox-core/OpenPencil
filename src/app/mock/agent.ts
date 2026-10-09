@@ -52,7 +52,7 @@ export interface MockAgentResult {
   pipeline: MockPipelineSnapshot
 }
 
-export const MOCK_AGENT_MAX_STEPS = 24
+export const MOCK_AGENT_MAX_STEPS = 48
 
 // 场景提示词已沉淀为可配置模板（mock/prompts.ts），按 options.promptTemplateId 解析，默认 website。
 
@@ -345,7 +345,7 @@ export async function runMockAgent(options: {
     prompt: userContent,
     tools,
     stopWhen: stepCountIs(options.maxSteps ?? MOCK_AGENT_MAX_STEPS),
-    maxOutputTokens: 16000,
+    maxOutputTokens: 32768,
     providerOptions: buildReasoningProviderOptions(options.providerID, options.reasoningEffort),
     prepareStep: () => ({
       activeTools: PHASE_TOOLS[state.phase] as (keyof typeof tools)[],
@@ -357,7 +357,7 @@ export async function runMockAgent(options: {
 
   return {
     fullText,
-    summary: fullText.trim() || finishSummary,
+    summary: finishSummary || fullText.trim(),
     filesWritten,
     pipeline: pipelineSnapshot(state)
   }

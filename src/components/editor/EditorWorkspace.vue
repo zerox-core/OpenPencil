@@ -67,6 +67,24 @@ watch(
   { immediate: true }
 )
 
+// Mock pages mount MockPageWorkspace instead of EditorCanvas, so the canvas
+// presentation acknowledgement would never arrive and any pending
+// waitForPresentation (recovery restore / file open) would stall until the
+// 10s timeout. The mock workspace renders synchronously from the graph, so
+// treat every scene change while it is mounted as presented.
+watch(
+  () => [mockMode.value, mockWorkspaceReady.value, store.state.sceneVersion] as const,
+  ([isMock, ready]) => {
+    if (!isMock || !ready) return
+    requestAnimationFrame(() => {
+      if (mockMode.value && mockWorkspaceReady.value) {
+        store.preparationController.acknowledgePresentation(store.state.sceneVersion)
+      }
+    })
+  },
+  { immediate: true }
+)
+
 onBeforeUnmount(() => {
   if (mockHotTimer) clearTimeout(mockHotTimer)
 })

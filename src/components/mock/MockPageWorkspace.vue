@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useElementSize, useEventListener, useLocalStorage } from '@vueuse/core'
+import { useElementSize, useEventListener, useLocalStorage, watchDebounced } from '@vueuse/core'
 import { strToU8, zipSync } from 'fflate'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
@@ -30,10 +30,12 @@ import {
   clampProjectSize,
   composePreview,
   extractHTML,
+  normalizeProjectPath,
   parseProjectFiles
 } from '@/app/mock/project'
 import { mockVisualReviewAvailable, runMockVisualReview } from '@/app/mock/review'
 import { IS_TAURI } from '@/constants'
+import ChatMarkdown from '@/components/chat/ChatMarkdown.vue'
 import AppButton from '@/components/ui/button/AppButton.vue'
 import IconButton from '@/components/ui/button/IconButton.vue'
 
@@ -185,13 +187,27 @@ const activeStepLabel = computed<string>(() => {
 })
 
 const messagesRef = ref<HTMLElement | null>(null)
+
+async function scrollConversationToBottom(): Promise<void> {
+  await nextTick()
+  const el = messagesRef.value
+  if (el) el.scrollTop = el.scrollHeight
+}
+
 watch(
   () => page.value?.messages.length,
-  async () => {
-    await nextTick()
-    const el = messagesRef.value
-    if (el) el.scrollTop = el.scrollHeight
-  }
+  () => void scrollConversationToBottom()
+)
+watch(
+  () =>
+    activity.value.length +
+    planSteps.value.filter((step) => step.status === 'done').length * 100,
+  () => void scrollConversationToBottom()
+)
+watchDebounced(
+  () => streamedText.value.length,
+  () => void scrollConversationToBottom(),
+  { debounce: 250 }
 )
 
 let activitySeq = 0
@@ -386,13 +402,18 @@ async function generate() {
         state.html = composed
       } else {
         const single = extractHTML(result.fullText)
-        if (!single) {
+        if (single) {
+          state.files = {}
+          state.html = single
+        } else if (result.fullText.trim()) {
+          // 模型这一轮选择用对话回答而不是写文件：按正常回答展示，不判定为失败
+          state.messages.push({ role: 'assistant', text: result.fullText.trim() })
+          return
+        } else {
           errorMsg.value = ai.value.htmlPageNoHtml
           state.messages.push({ role: 'assistant', text: ai.value.htmlPageNoHtml })
           return
         }
-        state.files = {}
-        state.html = single
       }
     }
     view.value = 'preview'
@@ -509,6 +530,22 @@ function handleWindowKeydown(event: KeyboardEvent) {
 
 useEventListener(window, 'keydown', handleWindowKeydown)
 
+/** 预览 iframe 里点击项目内 .html 链接时切换预览页（见 mock/project.ts 的运行时注入）。 */
+function handleMockFrameMessage(event: MessageEvent): void {
+  const data = event.data as { __openPencilMockNav?: unknown } | null
+  if (!data || typeof data.__openPencilMockNav !== 'string') return
+  if (generating.value) return
+  const state = page.value
+  if (!state) return
+  const target = normalizeProjectPath(data.__openPencilMockNav)
+  const files = projectFiles.value
+  if (!Object.hasOwn(files, target)) return
+  const composed = composePreview(files, target)
+  if (composed) state.html = composed
+}
+
+useEventListener(window, 'message', handleMockFrameMessage)
+
 onBeforeUnmount(() => {
   stopTimer()
   if (sharing.value && IS_TAURI) {
@@ -556,7 +593,7 @@ function handlePromptKeydown(event: KeyboardEvent) {
             :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
           >
             <div
-              class="max-w-[85%] rounded-lg px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap"
+              class="max-w-[85%] rounded-lg px-3 py-2 text-xs leading-relaxed"
               :class="
                 message.role === 'user' ? 'bg-accent text-white' : 'bg-surface/5 text-surface'
               "
@@ -564,17 +601,71 @@ function handlePromptKeydown(event: KeyboardEvent) {
                 message.role === 'user' ? 'mock-page-msg-user' : 'mock-page-msg-assistant'
               "
             >
-              {{ message.text }}
+              <span v-if="message.role === 'user'" class="whitespace-pre-wrap">{{
+                message.text
+              }}</span>
+              <ChatMarkdown v-else :content="message.text" mode="static" />
             </div>
           </div>
           <div v-if="generating" class="mb-2 flex justify-start">
             <div
-              class="flex items-center gap-2 rounded-lg bg-surface/5 px-3 py-2 text-xs text-muted"
+              class="max-w-[85%] rounded-lg bg-surface/5 px-3 py-2 text-xs leading-relaxed"
               data-test-id="mock-page-generating"
             >
-              <span class="mock-breathe inline-block size-1.5 rounded-full bg-accent"></span>
-              <span>{{ ai.htmlPageGenerating }}</span>
-              <span class="tabular-nums" data-test-id="mock-page-elapsed">{{ elapsedLabel }}</span>
+              <div class="mb-1 flex items-center gap-2 text-muted">
+                <span class="mock-breathe inline-block size-1.5 rounded-full bg-accent"></span>
+                <span>{{ ai.htmlPageGenerating }}</span>
+                <span class="tabular-nums" data-test-id="mock-page-elapsed">{{
+                  elapsedLabel
+                }}</span>
+              </div>
+              <div v-if="planSteps.length > 0" class="mb-1" data-test-id="mock-page-plan">
+                <div class="mb-1 text-[10px] font-semibold text-muted">
+                  {{ ai.mockPagePlanTitle }}
+                </div>
+                <div
+                  v-for="(step, index) in planSteps"
+                  :key="index"
+                  class="flex items-center gap-2 py-0.5 text-[11px]"
+                  :class="step.status === 'done' ? 'text-muted' : 'text-surface'"
+                  data-test-id="mock-page-plan-step"
+                  :data-status="step.status"
+                >
+                  <icon-lucide-check
+                    v-if="step.status === 'done'"
+                    class="size-3 shrink-0 text-accent"
+                  />
+                  <span
+                    v-else
+                    class="mock-breathe inline-block size-1.5 shrink-0 rounded-full bg-accent"
+                  ></span>
+                  <span class="truncate">{{ step.title }}</span>
+                </div>
+              </div>
+              <div data-test-id="mock-page-build-steps">
+                <div
+                  v-for="event in activity"
+                  :key="event.id"
+                  class="flex items-center gap-2 py-0.5 text-[11px]"
+                  :class="event.done ? 'text-muted' : 'text-surface'"
+                  data-test-id="mock-page-build-step"
+                  :data-step-id="event.id"
+                  :data-status="event.done ? 'done' : 'active'"
+                >
+                  <icon-lucide-check v-if="event.done" class="size-3 shrink-0 text-accent" />
+                  <span
+                    v-else
+                    class="mock-breathe inline-block size-1.5 shrink-0 rounded-full bg-accent"
+                  ></span>
+                  <span class="truncate">{{ event.label }}</span>
+                </div>
+              </div>
+              <pre
+                v-if="streamTail"
+                class="mt-1 max-h-24 overflow-y-auto font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
+                data-test-id="mock-page-build-status"
+                >{{ streamTail || activeStepLabel }}<span class="mock-caret"></span
+              ></pre>
             </div>
           </div>
         </template>
@@ -797,7 +888,7 @@ function handlePromptKeydown(event: KeyboardEvent) {
         >
           <iframe
             v-if="hasPage"
-            sandbox="allow-scripts"
+            sandbox="allow-scripts allow-popups allow-modals"
             :srcdoc="page?.html ?? ''"
             title="mock-page-preview"
             class="size-full border-0 bg-white"
@@ -836,7 +927,7 @@ function handlePromptKeydown(event: KeyboardEvent) {
             </div>
             <iframe
               v-if="hasPage"
-              sandbox="allow-scripts"
+              sandbox="allow-scripts allow-popups allow-modals"
               :srcdoc="page?.html ?? ''"
               title="mock-page-preview"
               class="min-h-0 flex-1 border-0 bg-white"
@@ -928,69 +1019,6 @@ function handlePromptKeydown(event: KeyboardEvent) {
               class="max-h-40 overflow-y-auto border-t border-white/10 px-3 py-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
               data-test-id="mock-page-reasoning-text"
               >{{ reasoningText }}</pre>
-          </div>
-        </div>
-        <div
-          v-if="generating"
-          class="pointer-events-none absolute inset-0 z-10"
-          data-test-id="mock-page-build-scene"
-        >
-          <div
-            class="pointer-events-auto absolute bottom-4 left-4 w-64 overflow-hidden rounded-lg border border-white/10 bg-[#14161a]/90 shadow-xl backdrop-blur"
-            data-test-id="mock-page-build-card"
-          >
-            <div
-              class="flex items-center gap-1.5 border-b border-white/10 px-3 py-2 text-[10px] font-semibold text-muted"
-            >
-              <span class="mock-breathe inline-block size-1.5 rounded-full bg-accent"></span>
-              <span>{{ ai.htmlPageGenerating }}</span>
-              <span class="tabular-nums">{{ elapsedLabel }}</span>
-            </div>
-            <div
-              v-if="planSteps.length > 0"
-              class="border-b border-white/10 px-3 py-2"
-              data-test-id="mock-page-plan"
-            >
-              <div class="mb-1 text-[10px] font-semibold text-muted">{{ ai.mockPagePlanTitle }}</div>
-              <div
-                v-for="(step, index) in planSteps"
-                :key="index"
-                class="flex items-center gap-2 py-0.5 text-[11px]"
-                :class="step.status === 'done' ? 'text-muted' : 'text-surface'"
-                data-test-id="mock-page-plan-step"
-                :data-status="step.status"
-              >
-                <icon-lucide-check v-if="step.status === 'done'" class="size-3 shrink-0 text-accent" />
-                <span
-                  v-else
-                  class="mock-breathe inline-block size-1.5 shrink-0 rounded-full bg-accent"
-                ></span>
-                <span class="truncate">{{ step.title }}</span>
-              </div>
-            </div>
-            <div class="max-h-56 overflow-y-auto px-3 py-2" data-test-id="mock-page-build-steps">
-              <div
-                v-for="event in activity"
-                :key="event.id"
-                class="flex items-center gap-2 py-0.5 text-[11px]"
-                :class="event.done ? 'text-muted' : 'text-surface'"
-                data-test-id="mock-page-build-step"
-                :data-step-id="event.id"
-                :data-status="event.done ? 'done' : 'active'"
-              >
-                <icon-lucide-check v-if="event.done" class="size-3 shrink-0 text-accent" />
-                <span
-                  v-else
-                  class="mock-breathe inline-block size-1.5 shrink-0 rounded-full bg-accent"
-                ></span>
-                <span class="truncate">{{ event.label }}</span>
-              </div>
-            </div>
-            <div
-              class="max-h-24 overflow-y-auto border-t border-white/10 px-3 py-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
-              data-test-id="mock-page-build-status"
-              >{{ streamTail || activeStepLabel }}<span class="mock-caret"></span
-            ></div>
           </div>
         </div>
       </div>

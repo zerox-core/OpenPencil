@@ -110,9 +110,30 @@ export function createDocumentRecovery({
     { flush: 'sync' }
   )
 
+  /**
+   * 有界等待在途写入：buildFigFile 对个别文档状态可能永不结算（恢复后点「不保存」
+   * 卡死的根因）。generation 已递增使晚到的写入自弃；等待超过上限就放行，
+   * 不让 discard / adopt / markProtected 无限期卡住界面。
+   */
+  const WRITE_DRAIN_TIMEOUT_MS = 5000
+
+  function drainBounded(pending: Promise<unknown> | null): Promise<void> {
+    if (pending === null) return Promise.resolve()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<void>((resolve) => {
+      timer = setTimeout(() => {
+        console.warn('[Recovery] Timed out draining in-flight snapshot write; continuing')
+        resolve()
+      }, WRITE_DRAIN_TIMEOUT_MS)
+    })
+    return Promise.race([pending.then(() => undefined, () => undefined), timeout]).finally(() => {
+      if (timer !== undefined) clearTimeout(timer)
+    })
+  }
+
   async function invalidateActiveWrite(): Promise<void> {
     lifecycleGeneration++
-    await Promise.all([writing, cleanup])
+    await Promise.all([drainBounded(writing), drainBounded(cleanup)])
   }
 
   return {

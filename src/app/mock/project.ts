@@ -47,9 +47,55 @@ export function parseProjectFiles(text: string): Record<string, string> {
   return files
 }
 
-export function composePreview(files: Record<string, string>): string {
+const PREVIEW_RUNTIME_MARK = '__openPencilPreviewRuntime'
+
+/**
+ * 预览运行时脚本，注入到合成后的预览 HTML：
+ * 1. localStorage / sessionStorage 兜底 —— 预览 iframe 是不透明源，直接访问会抛
+ *    SecurityError，这里替换成内存实现，游戏存分等逻辑不再报错；
+ * 2. 多页跳转拦截 —— srcdoc 预览里相对链接解析不到真实文件，点击项目内 .html
+ *    链接改为 postMessage 通知宿主切换预览页；顶层窗口（分享服务打开）不拦截。
+ */
+function buildPreviewRuntime(files: Record<string, string>): string {
+  const pages = Object.keys(files)
+    .filter((name) => name.toLowerCase().endsWith('.html'))
+    .map((name) => normalizeProjectPath(name))
+  const script = [
+    `(function(){if(window.parent===window)return;`,
+    `try{window.localStorage.getItem('_runtime_probe')}catch(err){`,
+    `var mem={};var shim={getItem:function(k){return Object.prototype.hasOwnProperty.call(mem,k)?mem[k]:null},`,
+    `setItem:function(k,v){mem[k]=String(v)},removeItem:function(k){delete mem[k]},`,
+    `clear:function(){mem={}},key:function(i){var ks=Object.keys(mem);return i<ks.length?ks[i]:null}};`,
+    `try{Object.defineProperty(window,'localStorage',{value:shim,configurable:true})}catch(e1){}`,
+    `try{Object.defineProperty(window,'sessionStorage',{value:shim,configurable:true})}catch(e2){}}`,
+    `var pages=${JSON.stringify(pages)};`,
+    `document.addEventListener('click',function(ev){`,
+    `var t=ev.target;while(t&&t.tagName!=='A')t=t.parentElement;if(!t)return;`,
+    `var href=t.getAttribute('href')||'';`,
+    `if(!href||href.charAt(0)==='#'||/^(https?:|mailto:|tel:|javascript:|data:)/i.test(href))return;`,
+    `var path=href.split('#')[0].split('?')[0].replace(/^[./]+/,'');`,
+    `if(pages.indexOf(path)===-1)return;`,
+    `ev.preventDefault();parent.postMessage({__openPencilMockNav:path},'*')});})();`
+  ].join('')
+  return `<script>/*${PREVIEW_RUNTIME_MARK}*/${script}${SCRIPT_CLOSE}`
+}
+
+function injectPreviewRuntime(html: string, files: Record<string, string>): string {
+  if (html.includes(PREVIEW_RUNTIME_MARK)) return html
+  const script = buildPreviewRuntime(files)
+  const head = /<head\b[^>]*>/i.exec(html)
+  if (head) {
+    return `${html.slice(0, head.index + head[0].length)}${script}${html.slice(head.index + head[0].length)}`
+  }
+  return script + html
+}
+
+export function composePreview(files: Record<string, string>, entry?: string): string {
   let html: string
-  if (Object.hasOwn(files, 'index.html')) {
+  const entryKey = entry === undefined ? '' : normalizeProjectPath(entry)
+  if (entryKey !== '' && Object.hasOwn(files, entryKey)) {
+    html = files[entryKey]
+  } else if (Object.hasOwn(files, 'index.html')) {
     html = files['index.html']
   } else {
     const fallback = Object.keys(files).find((name) => name.endsWith('.html'))
@@ -69,7 +115,7 @@ export function composePreview(files: Record<string, string>): string {
       return `<script>\n${files[key]}\n${SCRIPT_CLOSE}`
     }
   )
-  return html
+  return injectPreviewRuntime(html, files)
 }
 
 export function clampProjectSize(value: number): number {
