@@ -173,6 +173,8 @@
   "mockPageStepUnderstand": "Analiza wymagań",
   "mockPageStepPlan": "Planowanie i podział na kroki",
   "mockPageStepFinish": "Finalizacja",
+  "mockPageStepReview": "Samoocena wizualna",
+  "mockPageReviewFix": "Poprawianie uwag",
   "mockPagePhaseBuild": "Budowa i weryfikacja",
   "mockPagePlanTitle": "Plan budowy",
   "mockPageViewDevice": "Urządzenie",

@@ -224,6 +224,8 @@ export const aiMessageDefaults = {
   mockPageStepUnderstand: 'Understanding requirements',
   mockPageStepPlan: 'Planning and breaking down steps',
   mockPageStepFinish: 'Finishing up',
+  mockPageStepReview: 'Visual self-check',
+  mockPageReviewFix: 'Fixing self-check findings',
   mockPagePhaseBuild: 'Building and verifying',
   mockPagePlanTitle: 'Build plan'
 } as const

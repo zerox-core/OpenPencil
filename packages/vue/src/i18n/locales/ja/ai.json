@@ -173,6 +173,8 @@
   "mockPageStepUnderstand": "要件を理解中",
   "mockPageStepPlan": "計画とステップの分解",
   "mockPageStepFinish": "仕上げ中",
+  "mockPageStepReview": "ビジュアル確認",
+  "mockPageReviewFix": "指摘事項の修正",
   "mockPagePhaseBuild": "構築と検証",
   "mockPagePlanTitle": "構築プラン",
   "mockPageViewDevice": "デバイス",

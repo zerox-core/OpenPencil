@@ -173,6 +173,8 @@
   "mockPageStepUnderstand": "Compréhension de la demande",
   "mockPageStepPlan": "Planification et découpage en étapes",
   "mockPageStepFinish": "Finalisation",
+  "mockPageStepReview": "Auto-contrôle visuel",
+  "mockPageReviewFix": "Correction des défauts détectés",
   "mockPagePhaseBuild": "Construction et vérification",
   "mockPagePlanTitle": "Plan de construction",
   "mockPageViewDevice": "Appareil",

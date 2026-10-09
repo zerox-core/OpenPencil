@@ -173,6 +173,8 @@
   "mockPageStepUnderstand": "Анализ требований",
   "mockPageStepPlan": "Планирование и разбиение на шаги",
   "mockPageStepFinish": "Завершение",
+  "mockPageStepReview": "Визуальная самопроверка",
+  "mockPageReviewFix": "Исправление найденных недочётов",
   "mockPagePhaseBuild": "Сборка и проверка",
   "mockPagePlanTitle": "План сборки",
   "mockPageViewDevice": "Устройство",

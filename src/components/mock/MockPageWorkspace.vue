@@ -16,16 +16,23 @@ import { useVoiceInput } from '@/app/ai/voice/use-voice-input'
 import { saveExportedFile } from '@/app/document/export/files'
 import { downloadBlob } from '@/app/document/io/browser'
 import { useEditorStore } from '@/app/editor/active-store'
-import { runMockAgent } from '@/app/mock/agent'
+import { runMockAgent, type MockAgentResult } from '@/app/mock/agent'
 import type { MockPipelineSnapshot } from '@/app/mock/pipeline'
-import { MOCK_PAGE_SIZES, ensureMockPage, getMockPageId, mockPageState } from '@/app/mock/pages'
+import {
+  MOCK_PAGE_SIZES,
+  ensureMockPage,
+  getMockPageId,
+  mockPageState,
+  type MockPageSizeKind,
+  type MockPageState
+} from '@/app/mock/pages'
 import {
   clampProjectSize,
   composePreview,
   extractHTML,
   parseProjectFiles
 } from '@/app/mock/project'
-import type { MockPageSizeKind } from '@/app/mock/pages'
+import { mockVisualReviewAvailable, runMockVisualReview } from '@/app/mock/review'
 import { IS_TAURI } from '@/constants'
 import AppButton from '@/components/ui/button/AppButton.vue'
 import IconButton from '@/components/ui/button/IconButton.vue'
@@ -248,6 +255,48 @@ function stopTimer(): void {
   }
 }
 
+/**
+ * 视觉自查循环（画板「测试验证 → 反馈到 AI」）：生成完成后截图交给独立
+ * Vision 模型自查静态视觉问题；发现确信问题时带着问题清单再跑一轮修复（上限一轮）。
+ * 未配置 Vision 模型时整段静默跳过，返回 null。
+ */
+async function reviewGeneratedPage(
+  state: MockPageState,
+  userText: string,
+  firstRound: MockAgentResult,
+  runAgentRound: (roundPrompt: string) => Promise<MockAgentResult>
+): Promise<string | null> {
+  if (!state.html) return null
+  if (!(await mockVisualReviewAvailable())) return null
+  pushActivity(ai.value.mockPageStepReview)
+  const review = await runMockVisualReview({
+    html: state.html,
+    width: state.width,
+    height: state.height,
+    userPrompt: userText,
+    normsKind: firstRound.pipeline.normsKind
+  })
+  finishActivity(true)
+  if (review.status !== 'reviewed') return null
+  if (review.verdict.ok) return '视觉自查通过，未发现明显视觉问题'
+  pushActivity(ai.value.mockPageReviewFix)
+  try {
+    const fixPrompt = [
+      '视觉自查发现以下问题，请修复：',
+      ...review.verdict.issues.map((issue) => `- ${issue}`),
+      '',
+      `原始需求：${userText}`
+    ].join('\n')
+    await runAgentRound(fixPrompt)
+    finishActivity(true)
+    return `视觉自查发现 ${review.verdict.issues.length} 个问题，已自动修复一轮`
+  } catch (error) {
+    console.warn('mock review fix round failed', error)
+    finishActivity(false)
+    return `视觉自查发现 ${review.verdict.issues.length} 个问题，自动修复未完成，可继续追加要求`
+  }
+}
+
 async function generate() {
   const state = page.value
   const text = prompt.value.trim()
@@ -275,12 +324,12 @@ async function generate() {
     elapsedMs.value = performance.now() - startedAt
   }, 100)
   const pendingFiles: Record<string, string> = { ...state.files }
-  try {
-    const result = await runMockAgent({
+  const runAgentRound = (roundPrompt: string): Promise<MockAgentResult> =>
+    runMockAgent({
       model: runtime.model,
       providerID: runtime.role.connection.providerID,
       reasoningEffort: runtime.role.profile.reasoningEffort ?? '',
-      prompt: text,
+      prompt: roundPrompt,
       hasProject: hasPage.value,
       currentSource: currentSource.value,
       initialFiles: { ...state.files },
@@ -322,6 +371,8 @@ async function generate() {
         }
       }
     })
+  try {
+    const result = await runAgentRound(text)
     if (result.filesWritten === 0) {
       const parsedFiles = parseProjectFiles(result.fullText)
       if (Object.keys(parsedFiles).length > 0) {
@@ -345,12 +396,13 @@ async function generate() {
       }
     }
     view.value = 'preview'
+    const reviewNote = await reviewGeneratedPage(state, text, result, runAgentRound)
     finishActivity(true)
     pushActivity(ai.value.mockPageStepFinish)
     finishActivity(true)
     state.messages.push({
       role: 'assistant',
-      text: result.summary || ai.value.mockPageAssistantDone
+      text: reviewNote ? `${result.summary}\n${reviewNote}` : result.summary || ai.value.mockPageAssistantDone
     })
   } catch (error) {
     console.warn('mock page generation failed', error)

@@ -19,6 +19,7 @@ import {
 } from '@/app/mock/pipeline'
 import type { MockPipelineSnapshot, MockPipelineState } from '@/app/mock/pipeline'
 import { searchSimilarMockDesigns } from '@/app/mock/similar'
+import { composeMockSystemPrompt, resolveMockPromptTemplate } from '@/app/mock/prompts'
 import type { LanguageModel } from 'ai'
 
 /**
@@ -47,25 +48,13 @@ export interface MockAgentResult {
   fullText: string
   summary: string
   filesWritten: number
+  /** 收尾时的管线快照（阶段 / 规范类型 / 计划），供视觉自查等下游环节使用。 */
+  pipeline: MockPipelineSnapshot
 }
 
 export const MOCK_AGENT_MAX_STEPS = 24
 
-const SYSTEM_PROMPT = [
-  '你是一个资深前端工程师兼设计师，在一个支持工具调用的工程环境里按「规划管线」搭建前端小项目。',
-  '管线由状态机驱动，分四个阶段，每个阶段只能使用当前阶段开放的工具：',
-  '1. 需求分析：调用 get_design_norms 取回设计规范（画布 / 栅格 / 间距刻度 / 字号阶梯 / 配色与结构准则）；调用 search_similar_designs 搜索本地是否有相似的历史设计（命中时参考其源码结构，除非用户明确禁止参考）。两项都完成后自动进入计划阶段。',
-  '2. 制定计划：调用 plan_steps 把页面按语义结构拆成搭建步骤，每步注明标题与产出文件。提交计划后进入搭建阶段。',
-  '3. 搭建与验证：先用 set_canvas_size 按规范设定画布；再按计划逐步用 write_project_file 写文件、用 mark_step_done 标记步骤完成；每写完一批文件调用 check_project 做构建验证，有问题就修复后重新验证。',
-  '4. 收尾：全部步骤完成且最近一次 check_project 通过后，调用 finish_project 用一句话中文总结。',
-  '工程要求：',
-  '- index.html 是入口，通过 <link rel="stylesheet" href="styles/main.css"> 引入样式、通过 <script src="scripts/main.js"> 引入脚本；可以用 CDN 引入公开库（如 Tailwind、ECharts）；一律使用相对路径引用。',
-  '- 每次 write_project_file 输出完整的文件内容，不要省略、不要分段拼接；不要在工具参数里夹带 Markdown 代码围栏。',
-  '- 严格遵守取回的设计规范：栅格、间距刻度、字号阶梯、配色准则都要落地到 CSS。',
-  '- 页面要美观、现代、可交互，默认使用中文文案，除非用户另有要求。',
-  '- 修改已有项目时，计划只列需要变更的步骤，重写对应文件即可（未变更的文件不重写）。',
-  '- 工具调用之间可以用一两句话简要说明思路。'
-].join('\n')
+// 场景提示词已沉淀为可配置模板（mock/prompts.ts），按 options.promptTemplateId 解析，默认 website。
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -213,6 +202,8 @@ export async function runMockAgent(options: {
   initialFiles?: Record<string, string>
   /** 当前 mock 页 id，相似设计搜索时排除自身。 */
   mockId?: string
+  /** 场景提示词模板 id（默认 'website'）。 */
+  promptTemplateId?: string
   maxSteps?: number
   handlers: MockAgentHandlers
   onUpdate?: MockAgentUpdate
@@ -221,6 +212,7 @@ export async function runMockAgent(options: {
   let finishSummary = ''
   const state = createMockPipeline()
   const localFiles: Record<string, string> = { ...options.initialFiles }
+  const systemPrompt = composeMockSystemPrompt(resolveMockPromptTemplate(options.promptTemplateId))
 
   const tools = {
     get_design_norms: tool({
@@ -349,7 +341,7 @@ export async function runMockAgent(options: {
 
   const stream = streamText({
     model: options.model,
-    system: SYSTEM_PROMPT,
+    system: systemPrompt,
     prompt: userContent,
     tools,
     stopWhen: stepCountIs(options.maxSteps ?? MOCK_AGENT_MAX_STEPS),
@@ -357,7 +349,7 @@ export async function runMockAgent(options: {
     providerOptions: buildReasoningProviderOptions(options.providerID, options.reasoningEffort),
     prepareStep: () => ({
       activeTools: PHASE_TOOLS[state.phase] as (keyof typeof tools)[],
-      instructions: `${SYSTEM_PROMPT}\n\n${phaseStatusHint(state, filesWritten)}`
+      instructions: `${systemPrompt}\n\n${phaseStatusHint(state, filesWritten)}`
     })
   })
 
@@ -366,6 +358,7 @@ export async function runMockAgent(options: {
   return {
     fullText,
     summary: fullText.trim() || finishSummary,
-    filesWritten
+    filesWritten,
+    pipeline: pipelineSnapshot(state)
   }
 }
