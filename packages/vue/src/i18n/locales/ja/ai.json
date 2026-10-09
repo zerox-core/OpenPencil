@@ -175,6 +175,8 @@
   "mockPageStepFinish": "仕上げ中",
   "mockPageStepReview": "ビジュアル確認",
   "mockPageReviewFix": "指摘事項の修正",
+  "mockPageProcess": "生成プロセス",
+  "mockPageReasoning": "思考プロセス",
   "mockPagePhaseBuild": "構築と検証",
   "mockPagePlanTitle": "構築プラン",
   "mockPageViewDevice": "デバイス",

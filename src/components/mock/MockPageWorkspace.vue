@@ -173,10 +173,17 @@ const activityLabel = computed<string>(() => {
   return last.done ? `${last.label} ✓` : `${last.label} …`
 })
 
-const streamTail = computed<string>(() => {
-  const text = streamedText.value
-  return text.length > 240 ? text.slice(-240) : text
-})
+const reasoningPreRef = ref<HTMLElement | null>(null)
+
+watch(
+  () => reasoningText.value.length,
+  () => {
+    void nextTick(() => {
+      const el = reasoningPreRef.value
+      if (el) el.scrollTop = el.scrollHeight
+    })
+  }
+)
 
 const activeStepLabel = computed<string>(() => {
   for (let index = activity.value.length - 1; index >= 0; index--) {
@@ -423,13 +430,22 @@ async function generate() {
     finishActivity(true)
     state.messages.push({
       role: 'assistant',
-      text: reviewNote ? `${result.summary}\n${reviewNote}` : result.summary || ai.value.mockPageAssistantDone
+      text: reviewNote
+        ? `${result.summary}\n${reviewNote}`
+        : result.summary || ai.value.mockPageAssistantDone,
+      process: streamedText.value || undefined,
+      reasoning: reasoningText.value || undefined
     })
   } catch (error) {
     console.warn('mock page generation failed', error)
     finishActivity(false)
     errorMsg.value = ai.value.htmlPageFailed
-    state.messages.push({ role: 'assistant', text: ai.value.htmlPageFailed })
+    state.messages.push({
+      role: 'assistant',
+      text: ai.value.htmlPageFailed,
+      process: streamedText.value || undefined,
+      reasoning: reasoningText.value || undefined
+    })
   } finally {
     stopTimer()
     generating.value = false
@@ -605,6 +621,32 @@ function handlePromptKeydown(event: KeyboardEvent) {
                 message.text
               }}</span>
               <ChatMarkdown v-else :content="message.text" mode="static" />
+              <details
+                v-if="message.role === 'assistant' && message.reasoning"
+                class="mt-1"
+                data-test-id="mock-page-msg-reasoning"
+              >
+                <summary class="cursor-pointer text-[10px] font-semibold text-muted">
+                  {{ ai.mockPageReasoning }}
+                </summary>
+                <pre
+                  class="mt-1 max-h-40 overflow-y-auto font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
+                  >{{ message.reasoning }}</pre
+                >
+              </details>
+              <details
+                v-if="message.role === 'assistant' && message.process"
+                class="mt-1"
+                data-test-id="mock-page-msg-process"
+              >
+                <summary class="cursor-pointer text-[10px] font-semibold text-muted">
+                  {{ ai.mockPageProcess }}
+                </summary>
+                <pre
+                  class="mt-1 max-h-40 overflow-y-auto font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
+                  >{{ message.process }}</pre
+                >
+              </details>
             </div>
           </div>
           <div v-if="generating" class="mb-2 flex justify-start">
@@ -661,10 +703,10 @@ function handlePromptKeydown(event: KeyboardEvent) {
                 </div>
               </div>
               <pre
-                v-if="streamTail"
-                class="mt-1 max-h-24 overflow-y-auto font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
+                v-if="streamedText || activeStepLabel"
+                class="mt-1 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
                 data-test-id="mock-page-build-status"
-                >{{ streamTail || activeStepLabel }}<span class="mock-caret"></span
+                >{{ streamedText || activeStepLabel }}<span class="mock-caret"></span
               ></pre>
             </div>
           </div>
@@ -1016,9 +1058,11 @@ function handlePromptKeydown(event: KeyboardEvent) {
             </button>
             <pre
               v-if="reasoningOpen"
+              ref="reasoningPreRef"
               class="max-h-40 overflow-y-auto border-t border-white/10 px-3 py-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
               data-test-id="mock-page-reasoning-text"
-              >{{ reasoningText }}</pre>
+              >{{ reasoningText }}<span v-if="generating" class="mock-caret"></span
+            ></pre>
           </div>
         </div>
       </div>

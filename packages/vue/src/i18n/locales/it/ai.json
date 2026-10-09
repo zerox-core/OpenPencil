@@ -175,6 +175,8 @@
   "mockPageStepFinish": "Completamento",
   "mockPageStepReview": "Autocontrollo visivo",
   "mockPageReviewFix": "Correzione dei difetti rilevati",
+  "mockPageProcess": "Processo di generazione",
+  "mockPageReasoning": "Processo di ragionamento",
   "mockPagePhaseBuild": "Costruzione e verifica",
   "mockPagePlanTitle": "Piano di costruzione",
   "mockPageViewDevice": "Dispositivo",

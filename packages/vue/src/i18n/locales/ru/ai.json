@@ -175,6 +175,8 @@
   "mockPageStepFinish": "Завершение",
   "mockPageStepReview": "Визуальная самопроверка",
   "mockPageReviewFix": "Исправление найденных недочётов",
+  "mockPageProcess": "Процесс генерации",
+  "mockPageReasoning": "Ход рассуждений",
   "mockPagePhaseBuild": "Сборка и проверка",
   "mockPagePlanTitle": "План сборки",
   "mockPageViewDevice": "Устройство",

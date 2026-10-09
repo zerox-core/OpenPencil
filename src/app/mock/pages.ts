@@ -7,6 +7,10 @@ import { readMockPagesStorage, writeMockPagesStorage } from './storage'
 export interface MockChatMessage {
   role: 'user' | 'assistant'
   text: string
+  /** Full streamed narration from the generation round (collapsible in the bubble). */
+  process?: string
+  /** Model reasoning stream from the generation round, when the channel provides it. */
+  reasoning?: string
 }
 
 export interface MockPageState {
@@ -72,7 +76,10 @@ function sanitizeMessages(value: unknown): MockChatMessage[] {
     const message = item as Partial<MockChatMessage>
     if (message.role !== 'user' && message.role !== 'assistant') continue
     if (typeof message.text !== 'string') continue
-    messages.push({ role: message.role, text: message.text })
+    const clean: MockChatMessage = { role: message.role, text: message.text }
+    if (typeof message.process === 'string' && message.process) clean.process = message.process
+    if (typeof message.reasoning === 'string' && message.reasoning) clean.reasoning = message.reasoning
+    messages.push(clean)
   }
   return messages
 }

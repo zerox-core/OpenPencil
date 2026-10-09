@@ -206,6 +206,8 @@
   "mockPageStepFinish": "完成组装",
   "mockPageStepReview": "视觉自查",
   "mockPageReviewFix": "修复自查问题",
+  "mockPageProcess": "生成过程",
+  "mockPageReasoning": "思考过程",
   "mockPagePhaseBuild": "搭建与验证",
   "mockPagePlanTitle": "搭建计划",
   "mockPageViewDevice": "设备",
