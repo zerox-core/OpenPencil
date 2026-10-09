@@ -3,7 +3,7 @@ import { computed } from 'vue'
 
 import type { StorageProviderID } from '@/app/integrations/storage'
 
-import { clearRecentFileThumbnails } from './thumbnails'
+import { clearRecentFileThumbnails, removeRecentFileThumbnail } from './thumbnails'
 
 const MAX_RECENT_DOCUMENTS = 10
 const RECENT_DOCUMENTS_STORAGE_KEY = 'open-pencil:recent-documents'
@@ -91,6 +91,23 @@ export function forgetRecentDocument(id: string): void {
 
 export function forgetRecentFile(path: string): void {
   forgetRecentDocument(localDocumentId(path))
+}
+
+/**
+ * Deletes a recent local document for real: drops the cached cover, removes the
+ * .fig from disk, then drops the list entry. A file already gone from disk still
+ * loses its entry — the intent is to get rid of it either way.
+ */
+export async function deleteRecentLocalDocument(document: RecentLocalDocument): Promise<void> {
+  await removeRecentFileThumbnail(document.path)
+  const { remove } = await import("@tauri-apps/plugin-fs")
+  try {
+    await remove(document.path)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (!/not found|os error 2|cannot find/i.test(message)) throw error
+  }
+  forgetRecentDocument(document.id)
 }
 
 export async function clearRecentFiles(): Promise<void> {

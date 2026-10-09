@@ -25,5 +25,11 @@
   "newDesign": "Nowy projekt",
   "noMatchingFiles": "Brak plików pasujących do „{query}”.",
   "saveAsPrompt": "Zapisz jako:",
-  "browserFileAPINotSupported": "Twoja przeglądarka nie obsługuje interfejsu API plików lokalnych. Pliki będą pobierane zamiast zapisywane w bieżącym miejscu."
+  "browserFileAPINotSupported": "Twoja przeglądarka nie obsługuje interfejsu API plików lokalnych. Pliki będą pobierane zamiast zapisywane w bieżącym miejscu.",
+  "archiveRecentFile": "Archiwizuj (usuń z listy)",
+  "deleteRecentFile": "Usuń plik",
+  "deleteRecentFileTitle": "Usunąć „{name}”?",
+  "deleteRecentFileDescription": "Lokalny plik {path} zostanie trwale usunięty i usunięty z listy ostatnich plików. Tej operacji nie można cofnąć.",
+  "deleteRecentFileOpenWarning": "Plik jest obecnie otwarty na karcie edytora.",
+  "deleteRecentFileFailed": "Nie można usunąć {name}: {error}"
 }

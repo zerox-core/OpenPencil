@@ -25,5 +25,11 @@
   "newDesign": "Nouveau design",
   "noMatchingFiles": "Aucun fichier ne correspond à « {query} ».",
   "saveAsPrompt": "Enregistrer sous :",
-  "browserFileAPINotSupported": "Votre navigateur ne prend pas en charge l’API de fichiers locaux. Les fichiers seront téléchargés au lieu d’être enregistrés sur place."
+  "browserFileAPINotSupported": "Votre navigateur ne prend pas en charge l’API de fichiers locaux. Les fichiers seront téléchargés au lieu d’être enregistrés sur place.",
+  "archiveRecentFile": "Archiver (retirer de la liste)",
+  "deleteRecentFile": "Supprimer le fichier",
+  "deleteRecentFileTitle": "Supprimer « {name} » ?",
+  "deleteRecentFileDescription": "Le fichier local {path} sera définitivement supprimé et retiré de la liste des fichiers récents. Cette action est irréversible.",
+  "deleteRecentFileOpenWarning": "Il est actuellement ouvert dans un onglet de l'éditeur.",
+  "deleteRecentFileFailed": "Impossible de supprimer {name} : {error}"
 }

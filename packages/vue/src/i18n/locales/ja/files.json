@@ -25,5 +25,11 @@
   "newDesign": "新しいデザイン",
   "noMatchingFiles": "「{query}」に一致するファイルはありません。",
   "saveAsPrompt": "名前を付けて保存：",
-  "browserFileAPINotSupported": "このブラウザはローカルファイルAPIに対応していません。ファイルは同じ場所に保存されず、ダウンロードされます。"
+  "browserFileAPINotSupported": "このブラウザはローカルファイルAPIに対応していません。ファイルは同じ場所に保存されず、ダウンロードされます。",
+  "archiveRecentFile": "アーカイブ（リストから削除）",
+  "deleteRecentFile": "ファイルを削除",
+  "deleteRecentFileTitle": "「{name}」を削除しますか？",
+  "deleteRecentFileDescription": "ローカルファイル {path} は完全に削除され、最近使用したファイルのリストからも削除されます。この操作は元に戻せません。",
+  "deleteRecentFileOpenWarning": "このファイルは現在エディターのタブで開かれています。",
+  "deleteRecentFileFailed": "{name} を削除できませんでした: {error}"
 }

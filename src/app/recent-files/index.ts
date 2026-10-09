@@ -1,5 +1,6 @@
 export {
   clearRecentFiles,
+  deleteRecentLocalDocument,
   forgetRecentDocument,
   forgetRecentFile,
   recentDocuments,
@@ -15,5 +16,6 @@ export {
 export {
   cacheRecentFileThumbnail,
   loadCachedRecentFileThumbnail,
-  loadRecentFileThumbnail
+  loadRecentFileThumbnail,
+  removeRecentFileThumbnail
 } from './thumbnails'

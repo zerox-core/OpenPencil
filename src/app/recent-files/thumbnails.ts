@@ -1,6 +1,6 @@
 import { extractFigThumbnailFromReader } from '@open-pencil/fig'
 
-import { readCacheBytes, removeCachePrefix, writeCacheBytes } from '@/app/cache'
+import { readCacheBytes, removeCacheEntry, removeCachePrefix, writeCacheBytes } from '@/app/cache'
 import { isTauri } from '@/app/tauri/env'
 
 const RECENT_FILE_THUMBNAIL_CACHE_DIR = 'recent-file-thumbnails/v2'
@@ -35,6 +35,20 @@ export async function cacheRecentFileThumbnail(path: string, bytes: Uint8Array):
 
 export function clearRecentFileThumbnails(): Promise<void> {
   return removeCachePrefix(RECENT_FILE_THUMBNAIL_CACHE_DIR)
+}
+
+/**
+ * Best-effort cleanup for a single file about to be deleted. Must run while the
+ * file still exists: the cache key mixes in size and mtime from stat, which is
+ * unavailable once the file is gone.
+ */
+export async function removeRecentFileThumbnail(path: string): Promise<void> {
+  if (!isTauri()) return
+  try {
+    await removeCacheEntry(await recentFileThumbnailCacheKey(path))
+  } catch (error) {
+    console.warn("[Recent files] Thumbnail cleanup skipped", error)
+  }
 }
 
 export async function loadRecentFileThumbnail(path: string): Promise<Uint8Array | null> {

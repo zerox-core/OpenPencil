@@ -13,18 +13,21 @@ import {
 } from '@/app/integrations/storage'
 import {
   clearRecentFiles,
+  deleteRecentLocalDocument,
   forgetRecentDocument,
   loadRecentFileThumbnail,
   recentFiles,
-  type RecentDocument
+  type RecentDocument,
+  type RecentLocalDocument
 } from '@/app/recent-files'
 import { openSettingsDialog } from '@/app/settings/dialog'
 import { openFileFromPath } from '@/app/shell/menu/use'
 import { createStorageWorkspaceSource } from '@/app/storage/workspace/source'
-import { openStorageDocumentInNewTab } from '@/app/tabs'
+import { getTabsSnapshot, openStorageDocumentInNewTab } from '@/app/tabs'
 import DocumentEntry from '@/components/home/document/DocumentEntry.vue'
 import HomeSearchActions from '@/components/home/search/HomeSearchActions.vue'
 import AppButton from '@/components/ui/button/AppButton.vue'
+import AppConfirmationDialog from '@/components/ui/dialog/AppConfirmationDialog.vue'
 import IconButton from '@/components/ui/button/IconButton.vue'
 import SegmentedControl from '@/components/ui/select/SegmentedControl.vue'
 
@@ -154,6 +157,57 @@ function formattedDate(updatedAt: string): string {
   if (date.getTime() === 0) return ''
   return date.toLocaleString(locale.value)
 }
+
+const pendingDelete = ref<RecentLocalDocument | null>(null)
+const deleting = ref(false)
+
+const deleteDialogOpen = computed({
+  get: () => pendingDelete.value !== null,
+  set: (value: boolean) => {
+    if (!value) pendingDelete.value = null
+  }
+})
+const pendingDeleteOpenInEditor = computed(() => {
+  const document = pendingDelete.value
+  if (!document) return false
+  return getTabsSnapshot().some((tab) => tab.store.getSourceIdentity().path === document.path)
+})
+const deleteDialogDescription = computed(() => {
+  const document = pendingDelete.value
+  if (!document) return ''
+  const base = files.value.deleteRecentFileDescription({ path: document.path })
+  return pendingDeleteOpenInEditor.value
+    ? `${base} ${files.value.deleteRecentFileOpenWarning}`
+    : base
+})
+
+/** Archive: drop the list entry only — the local file stays on disk. */
+function archiveRecent(document: RecentDocument): void {
+  forgetRecentDocument(document.id)
+}
+
+function requestDeleteRecent(document: RecentDocument): void {
+  if (document.kind !== 'local') return
+  openError.value = null
+  pendingDelete.value = document
+}
+
+async function confirmDeleteRecent(): Promise<void> {
+  const document = pendingDelete.value
+  if (!document) return
+  deleting.value = true
+  try {
+    await deleteRecentLocalDocument(document)
+  } catch (error) {
+    openError.value = files.value.deleteRecentFileFailed({
+      name: document.name,
+      error: error instanceof Error ? error.message : String(error)
+    })
+  } finally {
+    deleting.value = false
+    pendingDelete.value = null
+  }
+}
 </script>
 
 <template>
@@ -224,7 +278,27 @@ function formattedDate(updatedAt: string): string {
             :metadata="formattedDate(document.updatedAt)"
             :previewURL="previewURL(document.id)"
             @open="openRecent(document)"
-          />
+          >
+            <template #actions>
+              <IconButton
+                :label="files.archiveRecentFile"
+                class="size-10 sm:size-7"
+                data-test-id="recent-file-archive"
+                @click="archiveRecent(document)"
+              >
+                <icon-lucide-archive class="size-3.5" />
+              </IconButton>
+              <IconButton
+                v-if="document.kind === 'local'"
+                :label="files.deleteRecentFile"
+                class="size-10 sm:size-7"
+                data-test-id="recent-file-delete"
+                @click="requestDeleteRecent(document)"
+              >
+                <icon-lucide-trash-2 class="size-3.5" />
+              </IconButton>
+            </template>
+          </DocumentEntry>
         </div>
 
         <div
@@ -238,7 +312,27 @@ function formattedDate(updatedAt: string): string {
             :name="document.name"
             :metadata="formattedDate(document.updatedAt)"
             @open="openRecent(document)"
-          />
+          >
+            <template #actions>
+              <IconButton
+                :label="files.archiveRecentFile"
+                class="size-10 sm:size-7"
+                data-test-id="recent-file-archive"
+                @click="archiveRecent(document)"
+              >
+                <icon-lucide-archive class="size-3.5" />
+              </IconButton>
+              <IconButton
+                v-if="document.kind === 'local'"
+                :label="files.deleteRecentFile"
+                class="size-10 sm:size-7"
+                data-test-id="recent-file-delete"
+                @click="requestDeleteRecent(document)"
+              >
+                <icon-lucide-trash-2 class="size-3.5" />
+              </IconButton>
+            </template>
+          </DocumentEntry>
         </div>
 
         <div
@@ -350,5 +444,17 @@ function formattedDate(updatedAt: string): string {
         </div>
       </section>
     </section>
+
+    <AppConfirmationDialog
+      v-model:open="deleteDialogOpen"
+      tone="danger"
+      :heading="pendingDelete ? files.deleteRecentFileTitle({ name: pendingDelete.name }) : ''"
+      :description="deleteDialogDescription"
+      :cancel-label="common.cancel"
+      :confirm-label="files.deleteRecentFile"
+      :confirm-loading="deleting"
+      @confirm="confirmDeleteRecent"
+      @cancel="pendingDelete = null"
+    />
   </main>
 </template>

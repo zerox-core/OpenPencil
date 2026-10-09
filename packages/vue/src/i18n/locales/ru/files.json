@@ -25,5 +25,11 @@
   "newDesign": "Новый дизайн",
   "noMatchingFiles": "Нет файлов по запросу «{query}».",
   "saveAsPrompt": "Сохранить как:",
-  "browserFileAPINotSupported": "Ваш браузер не поддерживает API локальных файлов. Вместо сохранения на месте файлы будут скачиваться."
+  "browserFileAPINotSupported": "Ваш браузер не поддерживает API локальных файлов. Вместо сохранения на месте файлы будут скачиваться.",
+  "archiveRecentFile": "Архивировать (убрать из списка)",
+  "deleteRecentFile": "Удалить файл",
+  "deleteRecentFileTitle": "Удалить «{name}»?",
+  "deleteRecentFileDescription": "Локальный файл {path} будет безвозвратно удалён и убран из списка недавних файлов. Это действие нельзя отменить.",
+  "deleteRecentFileOpenWarning": "Файл сейчас открыт во вкладке редактора.",
+  "deleteRecentFileFailed": "Не удалось удалить {name}: {error}"
 }

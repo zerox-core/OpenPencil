@@ -12,6 +12,7 @@ import { setOpenPencilStore } from '@/app/browser-bridge'
 import { describeDiagnosticError, recordStorageFailure } from '@/app/diagnostics'
 import { confirmAllDocuments } from '@/app/document/close/all'
 import { requestDocumentClose } from '@/app/document/close/prompt'
+import { persistNewDocumentToDefaultDir } from '@/app/document/io/default-save'
 import { readFigDocument } from '@/app/document/io/fig'
 import { applyImportedDocument } from '@/app/document/io/imported-document'
 import type { DocumentSourceIdentity } from '@/app/document/io/types'
@@ -119,11 +120,19 @@ export function leaveHome(tabId: string): void {
   tabsRef.value = tabsRef.value.with(tabIndex, { ...tab, kind: 'document' })
 }
 
-export function createDocumentInCurrentTab(): Tab {
+export function createDocumentInCurrentTab(options?: { persist?: boolean }): Tab {
   const current = activeTab.value
-  if (current?.kind !== 'home') return createTab()
-  leaveHome(current.id)
-  return getTabById(current.id) ?? current
+  let tab: Tab
+  if (current?.kind !== 'home') {
+    tab = createTab()
+  } else {
+    leaveHome(current.id)
+    tab = getTabById(current.id) ?? current
+  }
+  // New documents are persisted to the default project directory right away,
+  // so they survive without an explicit save. Save-as still moves them elsewhere.
+  if (options?.persist ?? true) void persistNewDocumentToDefaultDir(tab.store)
+  return tab
 }
 
 /**
@@ -131,7 +140,7 @@ export function createDocumentInCurrentTab(): Tab {
  * entry lands directly in the mock workspace instead of the design canvas.
  */
 export function createMockDocumentInCurrentTab(): Tab {
-  const tab = createDocumentInCurrentTab()
+  const tab = createDocumentInCurrentTab({ persist: false })
   const store = tab.store
   const previousPageId = store.state.currentPageId
   const pageId = store.addPage('Mock')
@@ -148,6 +157,9 @@ export function createMockDocumentInCurrentTab(): Tab {
   if (previousPageId && previousPageId !== pageId && store.graph.getNode(previousPageId)) {
     store.deletePage(previousPageId)
   }
+  // Persist only after the mock page replaced the default page, so the file on
+  // disk holds the mock content instead of an empty canvas.
+  void persistNewDocumentToDefaultDir(tab.store)
   return tab
 }
 

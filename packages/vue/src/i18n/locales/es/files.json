@@ -25,5 +25,11 @@
   "newDesign": "Nuevo diseño",
   "noMatchingFiles": "Ningún archivo coincide con «{query}».",
   "saveAsPrompt": "Guardar como:",
-  "browserFileAPINotSupported": "Tu navegador no admite la API de archivos locales. Los archivos se descargarán en lugar de guardarse en el mismo lugar."
+  "browserFileAPINotSupported": "Tu navegador no admite la API de archivos locales. Los archivos se descargarán en lugar de guardarse en el mismo lugar.",
+  "archiveRecentFile": "Archivar (quitar de la lista)",
+  "deleteRecentFile": "Eliminar archivo",
+  "deleteRecentFileTitle": "¿Eliminar «{name}»?",
+  "deleteRecentFileDescription": "El archivo local {path} se eliminará de forma permanente y se quitará de la lista de archivos recientes. Esta acción no se puede deshacer.",
+  "deleteRecentFileOpenWarning": "Actualmente está abierto en una pestaña del editor.",
+  "deleteRecentFileFailed": "No se pudo eliminar {name}: {error}"
 }

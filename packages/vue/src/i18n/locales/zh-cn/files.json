@@ -25,5 +25,11 @@
   "newDesign": "新建设计",
   "noMatchingFiles": "没有与“{query}”匹配的文件。",
   "saveAsPrompt": "另存为：",
-  "browserFileAPINotSupported": "你的浏览器不支持本地文件 API。文件将被下载，而不是保存在原位置。"
+  "browserFileAPINotSupported": "你的浏览器不支持本地文件 API。文件将被下载，而不是保存在原位置。",
+  "archiveRecentFile": "归档（仅从列表移除）",
+  "deleteRecentFile": "删除文件",
+  "deleteRecentFileTitle": "删除“{name}”？",
+  "deleteRecentFileDescription": "本地文件 {path} 将被永久删除，并会从最近列表中移除。此操作无法撤销。",
+  "deleteRecentFileOpenWarning": "该文件当前正在编辑标签页中打开。",
+  "deleteRecentFileFailed": "无法删除 {name}：{error}"
 }

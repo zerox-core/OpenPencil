@@ -34,6 +34,14 @@ export const filesMessageDefaults = {
   searchRecentAndStorageFiles: 'Search recent and storage files…',
   newDesign: 'New design',
   noMatchingFiles: params('No files match “{query}”.'),
+  archiveRecentFile: 'Archive (remove from list)',
+  deleteRecentFile: 'Delete file',
+  deleteRecentFileTitle: params('Delete “{name}”?'),
+  deleteRecentFileDescription: params(
+    'The local file {path} will be permanently deleted and removed from the recent list. This cannot be undone.'
+  ),
+  deleteRecentFileOpenWarning: 'It is currently open in an editor tab.',
+  deleteRecentFileFailed: params('Could not delete {name}: {error}'),
   saveAsPrompt: 'Save as:',
   browserFileAPINotSupported:
     "Your browser doesn't support the local file API. Files will be downloaded instead of saved in place."
