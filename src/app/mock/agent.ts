@@ -39,6 +39,10 @@ export interface MockAgentHandlers {
 export interface MockAgentUpdate {
   onTextDelta?(text: string): void
   onReasoningDelta?(text: string): void
+  /** 工具输入（参数）开始流式生成——参数尚未生成完即通知，给 UI 提前可见性。 */
+  onToolInputStart?(name: string): void
+  /** 工具输入流增量：totalBytes 为该工具参数已累计字节数，deltaBytes 为本次增量。 */
+  onToolInputDelta?(name: string, totalBytes: number, deltaBytes: number): void
   onToolStart?(name: string, label: string): void
   onToolDone?(name: string, label: string, ok: boolean): void
   onPipelineChange?(snapshot: MockPipelineSnapshot): void
@@ -150,6 +154,8 @@ function checkProject(files: Record<string, string>): { ok: boolean; issues: str
 interface MockStreamPart {
   type: string
   text?: string
+  id?: string
+  delta?: unknown
   toolName?: string
   input?: unknown
   output?: unknown
@@ -167,6 +173,30 @@ function forwardToolEvent(part: MockStreamPart, onUpdate: MockAgentUpdate | unde
   onUpdate?.onToolDone?.(name, label, ok)
 }
 
+/** 工具输入（参数）流转发：参数尚未生成完就给 UI 进度可见性（按工具累计字节数）。 */
+function forwardToolInputEvent(
+  part: MockStreamPart,
+  inputBytes: Map<string, number>,
+  encoder: TextEncoder,
+  onUpdate: MockAgentUpdate | undefined
+): void {
+  if (part.type === 'tool-input-start') {
+    const name = typeof part.toolName === 'string' ? part.toolName : ''
+    if (name.length === 0) return
+    inputBytes.set(part.id ?? name, 0)
+    onUpdate?.onToolInputStart?.(name)
+    return
+  }
+  if (part.type !== 'tool-input-delta') return
+  const key = typeof part.id === 'string' ? part.id : (part.toolName ?? '')
+  const delta = typeof part.delta === 'string' ? part.delta : ''
+  if (key.length === 0 || delta.length === 0) return
+  const deltaBytes = encoder.encode(delta).length
+  const total = (inputBytes.get(key) ?? 0) + deltaBytes
+  inputBytes.set(key, total)
+  onUpdate?.onToolInputDelta?.(part.toolName ?? '', total, deltaBytes)
+}
+
 /** 消费 agent 流：把文本 / 推理 / 工具事件转发给 onUpdate，并回报管线快照。 */
 async function consumeMockStream(
   stream: { fullStream: AsyncIterable<MockStreamPart> },
@@ -174,12 +204,16 @@ async function consumeMockStream(
   onUpdate: MockAgentUpdate | undefined
 ): Promise<string> {
   let fullText = ''
+  const encoder = new TextEncoder()
+  const inputBytes = new Map<string, number>()
   for await (const part of stream.fullStream) {
     if (part.type === 'text-delta' && typeof part.text === 'string') {
       fullText += part.text
       onUpdate?.onTextDelta?.(part.text)
     } else if (part.type === 'reasoning-delta' && typeof part.text === 'string') {
       onUpdate?.onReasoningDelta?.(part.text)
+    } else if (part.type === 'tool-input-start' || part.type === 'tool-input-delta') {
+      forwardToolInputEvent(part, inputBytes, encoder, onUpdate)
     } else if (
       typeof part.toolName === 'string' &&
       (part.type === 'tool-call' || part.type === 'tool-result')

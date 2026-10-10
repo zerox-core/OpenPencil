@@ -72,6 +72,7 @@ const generating = ref(false)
 const exporting = ref(false)
 const errorMsg = ref('')
 const streamedText = ref('')
+const generatedChars = ref(0)
 const selectedFile = ref('')
 const reasoningText = ref('')
 const reasoningOpen = ref(true)
@@ -334,6 +335,7 @@ async function generate() {
   state.messages.push({ role: 'user', text })
   prompt.value = ''
   streamedText.value = ''
+  generatedChars.value = 0
   reasoningText.value = ''
   activity.value = []
   contentStarted = false
@@ -373,15 +375,34 @@ async function generate() {
         onTextDelta: (chunk) => {
           noteContentStarted()
           streamedText.value += chunk
+          generatedChars.value += chunk.length
         },
         onReasoningDelta: (chunk) => {
           noteContentStarted()
           reasoningText.value += chunk
         },
-        onToolStart: (_name, label) => {
+        onToolInputStart: (name) => {
           noteContentStarted()
           finishActivity(true)
-          pushActivity(label)
+          pushActivity(name)
+        },
+        onToolInputDelta: (name, totalBytes, deltaBytes) => {
+          generatedChars.value += deltaBytes
+          const last = activity.value[activity.value.length - 1]
+          if (last && !last.done) {
+            last.label = `${name} · ${(totalBytes / 1024).toFixed(1)} KB`
+          }
+        },
+        onToolStart: (name, label) => {
+          noteContentStarted()
+          // 参数流阶段已推过同名活动：只升级标签，避免重复条目
+          const last = activity.value[activity.value.length - 1]
+          if (last && !last.done && last.label.startsWith(name)) {
+            last.label = label
+          } else {
+            finishActivity(true)
+            pushActivity(label)
+          }
         },
         onToolDone: (_name, _label, ok) => finishActivity(ok),
         onPipelineChange: (snapshot) => {
@@ -726,7 +747,7 @@ function handlePromptKeydown(event: KeyboardEvent) {
           <template v-else-if="voiceState === 'polishing'">{{ ai.voicePolishing }}</template>
           <template v-else
             >{{ ai.htmlPageGenerating }} · {{ elapsedLabel }} ·
-            {{ streamedText.length }}</template
+            {{ generatedChars }}</template
           >
         </div>
         <div class="flex items-end gap-2">
