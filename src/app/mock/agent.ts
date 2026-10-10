@@ -266,7 +266,7 @@ export async function runMockAgent(options: {
     }),
     search_similar_designs: tool({
       description:
-        '在本地历史 mock 项目里搜索与当前需求相似的设计，返回其需求描述与 index.html 源码摘录，供参考结构与技术选型。',
+        '在本地历史 mock 项目里搜索与当前需求相似的设计，返回其需求描述与结构摘要（板块与标题），供参考信息架构；不包含可复用的源码。',
       inputSchema: valibotSchema(
         v.object({
           query: v.pipe(v.string(), v.minLength(1))

@@ -15,8 +15,8 @@ export interface MockSimilarDesign {
   size: { width: number; height: number }
   /** 查询向量与该页面向量的余弦相似度（0~1）。 */
   score: number
-  /** index.html 源码摘录，供模型参考结构设计。 */
-  excerpt: string
+  /** 入口页面结构摘要（语义板块标签 + 标题文本），供模型参考信息架构；不含可复用源码。 */
+  outline: string
 }
 
 /** 相似度下限：低于它的历史设计视为不相关，不返回。 */
@@ -68,6 +68,22 @@ function htmlText(html: string): string {
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
+}
+
+/** 提取入口页面结构摘要：语义板块标签名 + h1-h3 标题文本，不含样式、文案细节与源码。 */
+function htmlOutline(html: string): string {
+  const tags: string[] = []
+  const tagRe = /<(header|nav|main|section|article|aside|footer)\b[^>]*>/gi
+  let tagMatch: RegExpExecArray | null
+  while ((tagMatch = tagRe.exec(html)) !== null && tags.length < 12) tags.push(tagMatch[1])
+  const headings: string[] = []
+  const headingRe = /<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi
+  let headingMatch: RegExpExecArray | null
+  while ((headingMatch = headingRe.exec(html)) !== null && headings.length < 8) {
+    const text = headingMatch[1].replace(/<[^>]+>/g, '').trim()
+    if (text) headings.push(text.slice(0, 30))
+  }
+  return [...tags, ...headings].join(' / ')
 }
 
 function termCounts(tokens: string[]): Map<string, number> {
@@ -137,7 +153,7 @@ export function searchSimilarMockDesigns(
       files: Object.keys(state.files),
       size: { width: state.width, height: state.height },
       score,
-      excerpt: entrySource.slice(0, 800)
+      outline: htmlOutline(entrySource).slice(0, 400)
     })
   }
   results.sort((a, b) => b.score - a.score)
