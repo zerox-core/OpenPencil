@@ -1,10 +1,5 @@
 <script setup lang="ts">
-import {
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogDescription,
-  AlertDialogTitle
-} from 'reka-ui'
+import { AlertDialogCancel, AlertDialogDescription, AlertDialogTitle } from 'reka-ui'
 import { computed } from 'vue'
 
 import AppButton from '@/components/ui/button/AppButton.vue'
@@ -33,6 +28,16 @@ const {
 
 const emit = defineEmits<{ confirm: []; cancel: [] }>()
 const open = defineModel<boolean>('open', { default: false })
+
+/**
+ * Reka UI's AlertDialogAction closes the dialog before the consumer's confirm
+ * handler runs, which silently breaks consumers that derive the dialog state
+ * from the pending payload. Emit first, then close.
+ */
+function handleConfirm(): void {
+  emit('confirm')
+  open.value = false
+}
 const confirmColor = computed(() => {
   if (tone === 'danger') return 'error'
   if (tone === 'neutral') return 'neutral'
@@ -54,16 +59,15 @@ const confirmColor = computed(() => {
           cancelLabel
         }}</AppButton>
       </AlertDialogCancel>
-      <AlertDialogAction as-child>
-        <AppButton
-          :color="confirmColor"
-          variant="solid"
-          :disabled="confirmDisabled"
-          :loading="confirmLoading"
-          @click="emit('confirm')"
-          >{{ confirmLabel }}</AppButton
-        >
-      </AlertDialogAction>
+      <AppButton
+        :color="confirmColor"
+        variant="solid"
+        :disabled="confirmDisabled"
+        :loading="confirmLoading"
+        data-test-id="confirmation-confirm"
+        @click="handleConfirm"
+        >{{ confirmLabel }}</AppButton
+      >
     </AppDialogFooter>
   </AppAlertDialogRoot>
 </template>

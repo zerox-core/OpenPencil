@@ -31,5 +31,9 @@
   "deleteRecentFileTitle": "Supprimer « {name} » ?",
   "deleteRecentFileDescription": "Le fichier local {path} sera définitivement supprimé et retiré de la liste des fichiers récents. Cette action est irréversible.",
   "deleteRecentFileOpenWarning": "Il est actuellement ouvert dans un onglet de l'éditeur.",
-  "deleteRecentFileFailed": "Impossible de supprimer {name} : {error}"
+  "deleteRecentFileFailed": "Impossible de supprimer {name} : {error}",
+  "archivedFiles": "Archivés",
+  "archivedFilesDescription": "Les fichiers archivés restent sur le disque. Cliquez sur une carte pour la renvoyer dans la liste des fichiers récents.",
+  "restoreArchivedFile": "Restaurer dans la liste des fichiers récents",
+  "deleteArchivedFileDescription": "Le fichier local {path} sera définitivement supprimé. Cette action est irréversible."
 }

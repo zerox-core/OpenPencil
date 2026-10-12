@@ -42,6 +42,13 @@ export const filesMessageDefaults = {
   ),
   deleteRecentFileOpenWarning: 'It is currently open in an editor tab.',
   deleteRecentFileFailed: params('Could not delete {name}: {error}'),
+  archivedFiles: 'Archived',
+  archivedFilesDescription:
+    'Archived files stay on disk. Click a card to move it back to the recent list.',
+  restoreArchivedFile: 'Restore to recent list',
+  deleteArchivedFileDescription: params(
+    'The local file {path} will be permanently deleted. This cannot be undone.'
+  ),
   saveAsPrompt: 'Save as:',
   browserFileAPINotSupported:
     "Your browser doesn't support the local file API. Files will be downloaded instead of saved in place."

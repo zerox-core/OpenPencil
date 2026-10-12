@@ -31,5 +31,9 @@
   "deleteRecentFileTitle": "Удалить «{name}»?",
   "deleteRecentFileDescription": "Локальный файл {path} будет безвозвратно удалён и убран из списка недавних файлов. Это действие нельзя отменить.",
   "deleteRecentFileOpenWarning": "Файл сейчас открыт во вкладке редактора.",
-  "deleteRecentFileFailed": "Не удалось удалить {name}: {error}"
+  "deleteRecentFileFailed": "Не удалось удалить {name}: {error}",
+  "archivedFiles": "Архив",
+  "archivedFilesDescription": "Архивные файлы остаются на диске. Нажмите на карточку, чтобы вернуть её в список последних файлов.",
+  "restoreArchivedFile": "Вернуть в список последних файлов",
+  "deleteArchivedFileDescription": "Локальный файл {path} будет удалён безвозвратно. Это действие нельзя отменить."
 }

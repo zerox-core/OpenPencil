@@ -31,5 +31,9 @@
   "deleteRecentFileTitle": "删除“{name}”？",
   "deleteRecentFileDescription": "本地文件 {path} 将被永久删除，并会从最近列表中移除。此操作无法撤销。",
   "deleteRecentFileOpenWarning": "该文件当前正在编辑标签页中打开。",
-  "deleteRecentFileFailed": "无法删除 {name}：{error}"
+  "deleteRecentFileFailed": "无法删除 {name}：{error}",
+  "archivedFiles": "已归档",
+  "archivedFilesDescription": "归档的文件仍保留在磁盘上。点击卡片可恢复到最近列表。",
+  "restoreArchivedFile": "恢复到最近列表",
+  "deleteArchivedFileDescription": "本地文件 {path} 将被永久删除。此操作无法撤销。"
 }

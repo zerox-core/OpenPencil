@@ -33,7 +33,7 @@ import {
   parseProjectFiles
 } from '@/app/mock/project'
 import { composeMockProjectPreview } from '@/app/mock/compiler'
-import { mockVisualReviewAvailable, runMockVisualReview } from '@/app/mock/review'
+import { mockVisualReviewAvailable, runMockVisualReviewLoop } from '@/app/mock/review'
 import { IS_TAURI } from '@/constants'
 import ChatMarkdown from '@/components/chat/ChatMarkdown.vue'
 import AppButton from '@/components/ui/button/AppButton.vue'
@@ -295,8 +295,9 @@ function stopTimer(): void {
 }
 
 /**
- * 视觉自查循环（画板「测试验证 → 反馈到 AI」）：生成完成后截图交给独立
- * Vision 模型自查静态视觉问题；发现确信问题时带着问题清单再跑一轮修复（上限一轮）。
+ * 视觉自查循环（画板「测试验证 → 反馈到 AI」）：生成完成后交给
+ * runMockVisualReviewLoop —— 截图给独立 Vision 模型自查，发现问题回灌修复、
+ * 修复后复检，直到收敛 / 停滞 / 达到轮次上限（详见 review.ts）。
  * 未配置 Vision 模型时整段静默跳过，返回 null。
  */
 async function reviewGeneratedPage(
@@ -307,33 +308,42 @@ async function reviewGeneratedPage(
 ): Promise<string | null> {
   if (!state.html) return null
   if (!(await mockVisualReviewAvailable())) return null
-  pushActivity(ai.value.mockPageStepReview)
-  const review = await runMockVisualReview({
-    html: state.html,
+  const result = await runMockVisualReviewLoop({
+    html: () => state.html,
     width: state.width,
     height: state.height,
     userPrompt: userText,
-    normsKind: firstRound.pipeline.normsKind
+    normsKind: firstRound.pipeline.normsKind,
+    applyFix: async (issues) => {
+      const fixPrompt = [
+        '视觉自查发现以下问题，请修复：',
+        ...issues.map((issue) => `- ${issue}`),
+        '',
+        `原始需求：${userText}`
+      ].join('\n')
+      await runAgentRound(fixPrompt)
+    },
+    hooks: {
+      reviewStart: () => pushActivity(ai.value.mockPageStepReview),
+      reviewDone: (ok) => finishActivity(ok),
+      fixStart: () => pushActivity(ai.value.mockPageReviewFix),
+      fixDone: (ok) => finishActivity(ok)
+    }
   })
-  finishActivity(true)
-  if (review.status !== 'reviewed') return null
-  if (review.verdict.ok) return '视觉自查通过，未发现明显视觉问题'
-  pushActivity(ai.value.mockPageReviewFix)
-  try {
-    const fixPrompt = [
-      '视觉自查发现以下问题，请修复：',
-      ...review.verdict.issues.map((issue) => `- ${issue}`),
-      '',
-      `原始需求：${userText}`
-    ].join('\n')
-    await runAgentRound(fixPrompt)
-    finishActivity(true)
-    return `视觉自查发现 ${review.verdict.issues.length} 个问题，已自动修复一轮`
-  } catch (error) {
-    console.warn('mock review fix round failed', error)
-    finishActivity(false)
-    return `视觉自查发现 ${review.verdict.issues.length} 个问题，自动修复未完成，可继续追加要求`
+  if (result.stopReason === 'skipped') return null
+  if (result.stopReason === 'converged') {
+    return result.fixRounds === 0
+      ? '视觉自查通过，未发现明显视觉问题'
+      : `视觉自查经 ${result.fixRounds} 轮自动修复后复检通过`
   }
+  const remaining = result.remainingIssues.length
+  if (result.stopReason === 'stagnated') {
+    return `视觉自查剩余 ${remaining} 个问题连续两轮未改善，已停止自动修复（共修复 ${result.fixRounds} 轮），可继续追加要求`
+  }
+  if (result.stopReason === 'max-rounds') {
+    return `视觉自查已达 ${result.fixRounds} 轮修复上限，仍剩 ${remaining} 个问题，可继续追加要求`
+  }
+  return `视觉自查发现问题，第 ${result.fixRounds} 轮自动修复未完成，可继续追加要求`
 }
 
 async function generate() {

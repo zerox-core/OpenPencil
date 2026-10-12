@@ -12,6 +12,7 @@ import {
   type StorageDocument
 } from '@/app/integrations/storage'
 import {
+  archiveRecentDocument,
   clearRecentFiles,
   deleteRecentLocalDocument,
   forgetRecentDocument,
@@ -24,6 +25,7 @@ import { openSettingsDialog } from '@/app/settings/dialog'
 import { openFileFromPath } from '@/app/shell/menu/use'
 import { createStorageWorkspaceSource } from '@/app/storage/workspace/source'
 import { getTabsSnapshot, openStorageDocumentInNewTab } from '@/app/tabs'
+import ArchivedFiles from '@/components/home/ArchivedFiles.vue'
 import DocumentEntry from '@/components/home/document/DocumentEntry.vue'
 import HomeSearchActions from '@/components/home/search/HomeSearchActions.vue'
 import AppButton from '@/components/ui/button/AppButton.vue'
@@ -181,9 +183,9 @@ const deleteDialogDescription = computed(() => {
     : base
 })
 
-/** Archive: drop the list entry only — the local file stays on disk. */
+/** Archive: move the entry to the archived area — the local file stays on disk. */
 function archiveRecent(document: RecentDocument): void {
-  forgetRecentDocument(document.id)
+  archiveRecentDocument(document.id)
 }
 
 function requestDeleteRecent(document: RecentDocument): void {
@@ -343,6 +345,8 @@ async function confirmDeleteRecent(): Promise<void> {
           <p class="mt-1 text-xs text-muted">{{ files.noRecentFilesDescription }}</p>
         </div>
       </section>
+
+      <ArchivedFiles />
 
       <section class="mt-7">
         <div class="mb-3 flex items-start gap-3">

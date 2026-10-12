@@ -31,5 +31,9 @@
   "deleteRecentFileTitle": "Usunąć „{name}”?",
   "deleteRecentFileDescription": "Lokalny plik {path} zostanie trwale usunięty i usunięty z listy ostatnich plików. Tej operacji nie można cofnąć.",
   "deleteRecentFileOpenWarning": "Plik jest obecnie otwarty na karcie edytora.",
-  "deleteRecentFileFailed": "Nie można usunąć {name}: {error}"
+  "deleteRecentFileFailed": "Nie można usunąć {name}: {error}",
+  "archivedFiles": "Zarchiwizowane",
+  "archivedFilesDescription": "Zarchiwizowane pliki pozostają na dysku. Kliknij kartę, aby przywrócić ją do listy ostatnich plików.",
+  "restoreArchivedFile": "Przywróć do listy ostatnich plików",
+  "deleteArchivedFileDescription": "Plik lokalny {path} zostanie trwale usunięty. Tej operacji nie można cofnąć."
 }

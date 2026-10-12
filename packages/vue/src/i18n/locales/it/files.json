@@ -31,5 +31,9 @@
   "deleteRecentFileTitle": "Eliminare «{name}»?",
   "deleteRecentFileDescription": "Il file locale {path} verrà eliminato definitivamente e rimosso dall'elenco dei file recenti. L'operazione non può essere annullata.",
   "deleteRecentFileOpenWarning": "È attualmente aperto in una scheda dell'editor.",
-  "deleteRecentFileFailed": "Impossibile eliminare {name}: {error}"
+  "deleteRecentFileFailed": "Impossibile eliminare {name}: {error}",
+  "archivedFiles": "Archiviati",
+  "archivedFilesDescription": "I file archiviati restano sul disco. Fai clic su una scheda per rimetterla nella lista dei file recenti.",
+  "restoreArchivedFile": "Ripristina nella lista dei file recenti",
+  "deleteArchivedFileDescription": "Il file locale {path} verrà eliminato definitivamente. Questa azione non può essere annullata."
 }

@@ -31,5 +31,9 @@
   "deleteRecentFileTitle": "„{name}“ löschen?",
   "deleteRecentFileDescription": "Die lokale Datei {path} wird endgültig gelöscht und aus der Liste der zuletzt verwendeten Dateien entfernt. Dies kann nicht rückgängig gemacht werden.",
   "deleteRecentFileOpenWarning": "Sie ist derzeit in einem Editor-Tab geöffnet.",
-  "deleteRecentFileFailed": "{name} konnte nicht gelöscht werden: {error}"
+  "deleteRecentFileFailed": "{name} konnte nicht gelöscht werden: {error}",
+  "archivedFiles": "Archiviert",
+  "archivedFilesDescription": "Archivierte Dateien bleiben auf der Festplatte. Klicke auf eine Karte, um sie zurück auf die Liste der letzten Dateien zu holen.",
+  "restoreArchivedFile": "Zurück auf die Liste der letzten Dateien",
+  "deleteArchivedFileDescription": "Die lokale Datei {path} wird dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden."
 }

@@ -7,6 +7,7 @@ import { clearRecentFileThumbnails, removeRecentFileThumbnail } from './thumbnai
 
 const MAX_RECENT_DOCUMENTS = 10
 const RECENT_DOCUMENTS_STORAGE_KEY = 'open-pencil:recent-documents'
+const ARCHIVED_DOCUMENTS_STORAGE_KEY = 'open-pencil:archived-documents'
 
 export interface RecentLocalDocument {
   id: string
@@ -28,6 +29,11 @@ export interface RecentStorageDocument {
 export type RecentDocument = RecentLocalDocument | RecentStorageDocument
 
 export const recentDocuments = useLocalStorage<RecentDocument[]>(RECENT_DOCUMENTS_STORAGE_KEY, [])
+
+export const archivedDocuments = useLocalStorage<RecentDocument[]>(
+  ARCHIVED_DOCUMENTS_STORAGE_KEY,
+  []
+)
 
 function fileName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path
@@ -93,21 +99,50 @@ export function forgetRecentFile(path: string): void {
   forgetRecentDocument(localDocumentId(path))
 }
 
+export function forgetArchivedDocument(id: string): void {
+  archivedDocuments.value = archivedDocuments.value.filter((document) => document.id !== id)
+}
+
+/** Archive: move the list entry into the archived area — the local file stays on disk. */
+export function archiveRecentDocument(id: string): void {
+  const document = normalizedRecentDocuments().find((candidate) => candidate.id === id)
+  if (!document) return
+  archivedDocuments.value = [document, ...archivedDocuments.value]
+  forgetRecentDocument(id)
+}
+
+/** Restore: move an archived entry back to the recent list. */
+export function restoreArchivedDocument(id: string): void {
+  const document = archivedDocuments.value.find((candidate) => candidate.id === id)
+  if (!document) return
+  remember(document)
+  forgetArchivedDocument(id)
+}
+
 /**
  * Deletes a recent local document for real: drops the cached cover, removes the
  * .fig from disk, then drops the list entry. A file already gone from disk still
  * loses its entry — the intent is to get rid of it either way.
  */
-export async function deleteRecentLocalDocument(document: RecentLocalDocument): Promise<void> {
-  await removeRecentFileThumbnail(document.path)
+async function removeLocalFileFromDisk(path: string): Promise<void> {
+  await removeRecentFileThumbnail(path)
   const { remove } = await import("@tauri-apps/plugin-fs")
   try {
-    await remove(document.path)
+    await remove(path)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (!/not found|os error 2|cannot find/i.test(message)) throw error
   }
+}
+
+export async function deleteRecentLocalDocument(document: RecentLocalDocument): Promise<void> {
+  await removeLocalFileFromDisk(document.path)
   forgetRecentDocument(document.id)
+}
+
+export async function deleteArchivedLocalDocument(document: RecentLocalDocument): Promise<void> {
+  await removeLocalFileFromDisk(document.path)
+  forgetArchivedDocument(document.id)
 }
 
 export async function clearRecentFiles(): Promise<void> {

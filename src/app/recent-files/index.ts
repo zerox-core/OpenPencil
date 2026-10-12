@@ -1,6 +1,10 @@
 export {
+  archivedDocuments,
+  archiveRecentDocument,
   clearRecentFiles,
+  deleteArchivedLocalDocument,
   deleteRecentLocalDocument,
+  forgetArchivedDocument,
   forgetRecentDocument,
   forgetRecentFile,
   recentDocuments,
@@ -9,6 +13,7 @@ export {
   recentLocalFilePaths,
   rememberRecentFile,
   rememberRecentStorageDocument,
+  restoreArchivedDocument,
   type RecentDocument,
   type RecentLocalDocument,
   type RecentStorageDocument
