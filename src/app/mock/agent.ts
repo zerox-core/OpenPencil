@@ -9,24 +9,31 @@ import { getMockDesignNorms, MOCK_NORMS_KINDS } from '@/app/mock/norms'
 import {
   advancePipeline,
   createMockPipeline,
+  declareProjectKind,
   finishBlockReason,
   markStepDone,
   PHASE_TOOLS,
   phaseStatusHint,
   pipelineSnapshot,
   recordVerification,
-  submitPlan
+  submitPlan,
+  submitSkeletonBlockReason,
+  writePolicyError
 } from '@/app/mock/pipeline'
 import type { MockPipelineSnapshot, MockPipelineState } from '@/app/mock/pipeline'
+import { MOCK_PROJECT_KINDS, mockTsEntry } from '@/app/mock/kinds'
+import { compileMockProject } from '@/app/mock/compiler'
 import { searchSimilarMockDesigns } from '@/app/mock/similar'
 import { composeMockSystemPrompt, resolveMockPromptTemplate } from '@/app/mock/prompts'
 import type { LanguageModel } from 'ai'
 
 /**
- * Mock 页面的 agentic 生成循环（v2 规划管线版）：
- * 画板流程落成显式状态机 —— 需求分析（取规范 + 搜相似）→ 制定计划（plan_steps，
- * 计划是数据不是聊天文本）→ 搭建 ⇄ 验证（写文件 / 标记步骤 / check_project）
- * → 收尾（finish_project 受状态机门禁约束）。
+ * Mock 页面的 agentic 生成循环（五阶段规划管线版）：
+ * 画板流程落成显式状态机 —— 需求分析（取规范 + 搜相似 + declare_project_kind
+ * 选项目形态）→ 制定计划（plan_steps，计划是数据不是聊天文本，提交时做确定性
+ * 校验）→ 布局骨架（index.html 语义结构 + styles/base.css 设计令牌，submit_skeleton
+ * 门禁）→ 视觉精修 ⇄ 验证（写文件 / 标记步骤 / check_project，TS 项目做 esbuild
+ * 真实编译检查）→ 收尾（finish_project 受状态机门禁约束）。
  * 工具按阶段动态暴露（prepareStep + activeTools），模型在当前阶段只能看到
  * 当前阶段的工具；每一步通过 prepareStep instructions 把管线状态注入模型。
  */
@@ -87,6 +94,7 @@ export function describeToolCall(name: string, input: unknown): string {
   if (name === 'plan_steps' && Array.isArray(input.steps)) {
     return `${name} · ${input.steps.length} 步`
   }
+  if (name === 'declare_project_kind') return `${name} · ${textValue(input.kind)}`
   if (name === 'mark_step_done') return `${name} · ${textValue(input.stepId)}`
   return name
 }
@@ -149,6 +157,34 @@ function checkProject(files: Record<string, string>): { ok: boolean; issues: str
     }
   }
   return { ok: blocking.length === 0, issues: [...blocking, ...warnings] }
+}
+
+/**
+ * check_project 的完整校验：静态检查之上，按项目类型做 esbuild-wasm 真实编译。
+ * 编译失败属于阻塞项（TS 语法错误不能收尾）；编译产物的告警不阻塞。
+ */
+async function checkProjectWithCompile(
+  state: MockPipelineState,
+  files: Record<string, string>
+): Promise<{ ok: boolean; issues: string[] }> {
+  const result = checkProject(files)
+  const spec = state.projectKind === null ? null : MOCK_PROJECT_KINDS[state.projectKind]
+  if (!spec || !spec.needsCompile) return result
+  const entry = mockTsEntry(files, spec)
+  if (!entry) {
+    return {
+      ok: result.ok,
+      issues: [...result.issues, `提示：还没有 TS 入口文件（${spec.tsEntries.join(' 或 ')}），暂未做编译检查`]
+    }
+  }
+  const compiled = await compileMockProject(files, entry)
+  const issues = [...result.issues]
+  if (compiled.js !== null) {
+    for (const message of compiled.errors) issues.push(`编译警告（${entry}）：${message}`)
+  } else {
+    for (const message of compiled.errors) issues.unshift(`编译失败（${entry}）：${message}`)
+  }
+  return { ok: result.ok && compiled.js !== null, issues }
 }
 
 interface MockStreamPart {
@@ -280,9 +316,22 @@ export async function runMockAgent(options: {
         return { matches }
       }
     }),
+    declare_project_kind: tool({
+      description:
+        '声明本次项目的形态：html（纯静态页）/ ts-static（TypeScript 增强静态页，浏览器内编译）/ spa（框架单页应用，依赖经 esm.sh CDN 加载）。按需求选：展示型页面选 html；有交互逻辑选 ts-static；多视图重交互选 spa。声明后各阶段的文件策略与必需文件随之确定。',
+      inputSchema: valibotSchema(
+        v.object({
+          kind: v.picklist(['html', 'ts-static', 'spa'])
+        })
+      ),
+      execute: async ({ kind }) => {
+        const spec = declareProjectKind(state, kind)
+        return { ok: true, kind: spec.id, label: spec.label, summary: spec.summary, playbook: spec.playbook }
+      }
+    }),
     plan_steps: tool({
       description:
-        '提交搭建计划：把页面按语义结构拆成有序步骤，每步注明标题与产出文件。提交后进入搭建阶段，之后用 mark_step_done 逐步标记完成。',
+        '提交计划：把页面按语义结构拆成 2~8 步，每步注明标题与产出文件（从零生成需覆盖项目类型的必需文件）。从零生成提交后进入布局骨架阶段；修改已有项目提交后直接进入视觉精修阶段，之后用 mark_step_done 逐步标记完成。',
       inputSchema: valibotSchema(
         v.object({
           steps: v.array(
@@ -295,8 +344,9 @@ export async function runMockAgent(options: {
         })
       ),
       execute: async ({ steps }) => {
-        const plan = submitPlan(state, steps)
-        return { ok: true, steps: plan }
+        const result = submitPlan(state, steps, { fresh: !options.hasProject })
+        if (!result.ok) return { ok: false, error: result.error }
+        return { ok: true, steps: result.plan }
       }
     }),
     set_canvas_size: tool({
@@ -317,7 +367,7 @@ export async function runMockAgent(options: {
     }),
     write_project_file: tool({
       description:
-        '把一个文件完整写入当前项目并立即生效（右侧预览会热更新）。index.html 是入口文件；样式放 styles/main.css；交互脚本放 scripts/main.js。',
+        '把一个文件完整写入当前项目并立即生效（右侧预览会热更新）。能写哪些文件由当前阶段与项目类型决定：布局骨架阶段只写 index.html 与 styles/base.css；视觉精修阶段按形态写 styles/main.css、scripts/main.js（或 scripts/main.ts、src/*.ts(x)）等。',
       inputSchema: valibotSchema(
         v.object({
           path: v.pipe(v.string(), v.minLength(1)),
@@ -327,10 +377,23 @@ export async function runMockAgent(options: {
       execute: async ({ path, content }) => {
         const normalized = normalizeProjectPath(path)
         if (!normalized) return { ok: false, error: 'invalid path' }
+        const policyError = writePolicyError(state, normalized)
+        if (policyError) return { ok: false, error: policyError }
         options.handlers.writeProjectFile(normalized, content)
         localFiles[normalized] = content
         filesWritten++
         return { ok: true, path: normalized, bytes: content.length }
+      }
+    }),
+    submit_skeleton: tool({
+      description:
+        '提交布局骨架：index.html 语义结构（真实文案、无内联样式）与 styles/base.css 设计令牌都写完后调用，通过门禁（语义板块 ≥2）后进入视觉精修阶段。',
+      inputSchema: valibotSchema(v.object({})),
+      execute: async () => {
+        const blocked = submitSkeletonBlockReason(state, localFiles)
+        if (blocked) return { ok: false, error: blocked }
+        state.phase = 'refine'
+        return { ok: true }
       }
     }),
     mark_step_done: tool({
@@ -348,19 +411,20 @@ export async function runMockAgent(options: {
     }),
     check_project: tool({
       description:
-        '对当前项目做构建验证：入口文件存在、相对引用可解析、文件非空、CSS/JS 基本配平。收尾前必须通过；修复问题后要重新验证。',
+        '对当前项目做构建验证：入口文件存在、相对引用可解析、文件非空、CSS/JS 基本配平；ts-static / spa 项目还会用 esbuild 做真实编译检查（语法错误会阻塞收尾）。收尾前必须通过；修复问题后要重新验证。',
       inputSchema: valibotSchema(v.object({})),
       execute: async () => {
-        const result = checkProject(localFiles)
+        const result = await checkProjectWithCompile(state, localFiles)
         recordVerification(state, result, filesWritten)
         return result
       }
     }),
     finish_project: tool({
-      description: '全部步骤完成且最近一次 check_project 通过后调用，用一句话中文总结你做了什么。',
+      description:
+        '全部步骤完成、项目类型的必需文件齐备且最近一次 check_project 通过后调用，用一句话中文总结你做了什么。',
       inputSchema: valibotSchema(v.object({ summary: v.string() })),
       execute: async ({ summary }) => {
-        const blocked = finishBlockReason(state, filesWritten)
+        const blocked = finishBlockReason(state, filesWritten, localFiles)
         if (blocked) return { ok: false, error: blocked }
         state.phase = 'done'
         finishSummary = summary

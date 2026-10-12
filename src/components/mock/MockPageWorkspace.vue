@@ -28,11 +28,11 @@ import {
 } from '@/app/mock/pages'
 import {
   clampProjectSize,
-  composePreview,
   extractHTML,
   normalizeProjectPath,
   parseProjectFiles
 } from '@/app/mock/project'
+import { composeMockProjectPreview } from '@/app/mock/compiler'
 import { mockVisualReviewAvailable, runMockVisualReview } from '@/app/mock/review'
 import { IS_TAURI } from '@/constants'
 import ChatMarkdown from '@/components/chat/ChatMarkdown.vue'
@@ -244,6 +244,21 @@ function noteContentStarted(): void {
   finishActivity(true)
 }
 
+/** 预览组装（带编译）：TS 项目经 esbuild-wasm 编译后内联；序号防竞态——旧结果不覆盖新写入。 */
+let previewComposeSeq = 0
+
+function schedulePreviewCompose(files: Record<string, string>, entry?: string): void {
+  const seq = ++previewComposeSeq
+  void composeMockProjectPreview(files, entry)
+    .then((composed) => {
+      if (seq !== previewComposeSeq || !composed) return null
+      const state = page.value
+      if (state) state.html = composed
+      return null
+    })
+    .catch((error) => console.warn('mock preview compose failed', error))
+}
+
 function sizeKindLabel(kind: MockPageSizeKind): string {
   if (kind === 'tablet') return ai.value.mockPageSizeTablet
   if (kind === 'phone') return ai.value.mockPageSizePhone
@@ -367,8 +382,7 @@ async function generate() {
         writeProjectFile: (path, content) => {
           pendingFiles[path] = content
           state.files = { ...pendingFiles }
-          const composed = composePreview(state.files)
-          if (composed) state.html = composed
+          schedulePreviewCompose(state.files)
         }
       },
       onUpdate: {
@@ -410,7 +424,8 @@ async function generate() {
           if (snapshot.phase !== lastPhase) {
             lastPhase = snapshot.phase
             if (snapshot.phase === 'plan') pushActivity(ai.value.mockPageStepPlan)
-            else if (snapshot.phase === 'build') pushActivity(ai.value.mockPagePhaseBuild)
+            else if (snapshot.phase === 'skeleton') pushActivity(ai.value.mockPagePhaseSkeleton)
+            else if (snapshot.phase === 'refine') pushActivity(ai.value.mockPagePhaseRefine)
           }
         }
       }
@@ -420,7 +435,7 @@ async function generate() {
     if (result.filesWritten === 0) {
       const parsedFiles = parseProjectFiles(result.fullText)
       if (Object.keys(parsedFiles).length > 0) {
-        const composed = composePreview(parsedFiles)
+        const composed = await composeMockProjectPreview(parsedFiles)
         if (!composed) {
           errorMsg.value = ai.value.htmlPageNoHtml
           state.messages.push({ role: 'assistant', text: ai.value.htmlPageNoHtml })
@@ -572,13 +587,11 @@ function handleMockFrameMessage(event: MessageEvent): void {
   const data = event.data as { __openPencilMockNav?: unknown } | null
   if (!data || typeof data.__openPencilMockNav !== 'string') return
   if (generating.value) return
-  const state = page.value
-  if (!state) return
+  if (!page.value) return
   const target = normalizeProjectPath(data.__openPencilMockNav)
   const files = projectFiles.value
   if (!Object.hasOwn(files, target)) return
-  const composed = composePreview(files, target)
-  if (composed) state.html = composed
+  schedulePreviewCompose(files, target)
 }
 
 useEventListener(window, 'message', handleMockFrameMessage)

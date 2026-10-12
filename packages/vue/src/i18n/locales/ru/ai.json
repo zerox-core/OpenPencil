@@ -178,6 +178,8 @@
   "mockPageProcess": "Процесс генерации",
   "mockPageReasoning": "Ход рассуждений",
   "mockPagePhaseBuild": "Сборка и проверка",
+  "mockPagePhaseSkeleton": "Каркас макета",
+  "mockPagePhaseRefine": "Визуальная доработка",
   "mockPagePlanTitle": "План сборки",
   "mockPageViewDevice": "Устройство",
   "mockPageViewFlat": "Без рамки",

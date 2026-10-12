@@ -178,6 +178,8 @@
   "mockPageProcess": "Proceso de generación",
   "mockPageReasoning": "Proceso de razonamiento",
   "mockPagePhaseBuild": "Construyendo y verificando",
+  "mockPagePhaseSkeleton": "Esqueleto de diseño",
+  "mockPagePhaseRefine": "Refinamiento visual",
   "mockPagePlanTitle": "Plan de construcción",
   "mockPageViewDevice": "Dispositivo",
   "mockPageViewFlat": "Sin marco",

@@ -229,6 +229,8 @@ export const aiMessageDefaults = {
   mockPageProcess: 'Generation process',
   mockPageReasoning: 'Thinking process',
   mockPagePhaseBuild: 'Building and verifying',
+  mockPagePhaseSkeleton: 'Layout skeleton',
+  mockPagePhaseRefine: 'Visual refinement',
   mockPagePlanTitle: 'Build plan'
 } as const
 

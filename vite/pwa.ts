@@ -7,6 +7,7 @@ export function openPencilPwaPlugin() {
     workbox: {
       maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
       globPatterns: ['**/*.{js,css,html,wasm,png,svg,ico,ttf,webmanifest}'],
+      globIgnores: ['**/esbuild-*.wasm'],
       navigateFallback: '/index.html'
     },
     manifest: {

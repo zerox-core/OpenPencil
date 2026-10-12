@@ -178,6 +178,8 @@
   "mockPageProcess": "Proces generowania",
   "mockPageReasoning": "Proces myślowy",
   "mockPagePhaseBuild": "Budowa i weryfikacja",
+  "mockPagePhaseSkeleton": "Szkielet układu",
+  "mockPagePhaseRefine": "Dopracowanie wizualne",
   "mockPagePlanTitle": "Plan budowy",
   "mockPageViewDevice": "Urządzenie",
   "mockPageViewFlat": "Płasko",

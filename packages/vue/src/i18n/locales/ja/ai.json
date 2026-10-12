@@ -178,6 +178,8 @@
   "mockPageProcess": "生成プロセス",
   "mockPageReasoning": "思考プロセス",
   "mockPagePhaseBuild": "構築と検証",
+  "mockPagePhaseSkeleton": "レイアウト骨格",
+  "mockPagePhaseRefine": "ビジュアル仕上げ",
   "mockPagePlanTitle": "構築プラン",
   "mockPageViewDevice": "デバイス",
   "mockPageViewFlat": "フラット",

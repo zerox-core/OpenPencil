@@ -112,7 +112,9 @@ export function composePreview(files: Record<string, string>, entry?: string): s
     (tag, src: string) => {
       const key = normalizeProjectPath(src)
       if (!Object.hasOwn(files, key)) return tag
-      return `<script>\n${files[key]}\n${SCRIPT_CLOSE}`
+      // esbuild 产物是 ESM bundle（含 import 语句），内联时必须保留 type="module"。
+      const typeAttr = /type=["']module["']/i.test(tag) ? ' type="module"' : ''
+      return `<script${typeAttr}>\n${files[key]}\n${SCRIPT_CLOSE}`
     }
   )
   return injectPreviewRuntime(html, files)

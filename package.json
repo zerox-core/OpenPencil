@@ -137,6 +137,7 @@
     "culori": "^4.0.2",
     "dedent": "^1.7.2",
     "es-toolkit": "^1.51.0",
+    "esbuild-wasm": "0.27.7",
     "fflate": "^0.8.3",
     "fuse.js": "^7.5.0",
     "fzstd": "^0.1.1",

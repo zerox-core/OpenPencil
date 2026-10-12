@@ -178,6 +178,8 @@
   "mockPageProcess": "Generierungsprozess",
   "mockPageReasoning": "Denkprozess",
   "mockPagePhaseBuild": "Aufbau und Prüfung",
+  "mockPagePhaseSkeleton": "Layout-Gerüst",
+  "mockPagePhaseRefine": "Visuelle Verfeinerung",
   "mockPagePlanTitle": "Aufbauplan",
   "mockPageViewDevice": "Gerät",
   "mockPageViewFlat": "Flach",
