@@ -16,13 +16,15 @@ import { useVoiceInput } from '@/app/ai/voice/use-voice-input'
 import { saveExportedFile } from '@/app/document/export/files'
 import { downloadBlob } from '@/app/document/io/browser'
 import { useEditorStore } from '@/app/editor/active-store'
-import { runMockAgent, type MockAgentResult } from '@/app/mock/agent'
+import { runMockAgent, type MockAgentResult, type MockClarificationQuestion } from '@/app/mock/agent'
 import type { MockPipelineSnapshot } from '@/app/mock/pipeline'
 import {
   MOCK_PAGE_SIZES,
   ensureMockPage,
   getMockPageId,
   mockPageState,
+  mockPagesPersistError,
+  type MockChatMessage,
   type MockPageSizeKind,
   type MockPageState
 } from '@/app/mock/pages'
@@ -79,6 +81,8 @@ const reasoningOpen = ref(true)
 const elapsedMs = ref(0)
 const fullscreen = ref(false)
 const activity = ref<AgentActivity[]>([])
+/** 流式工具输入的 toolCallId → 活动条索引（并行工具调用时各更新各的条目）。 */
+const toolActivityIdx = new Map<string, number>()
 const planSteps = ref<MockPipelineSnapshot['plan']>([])
 const shareURL = ref('')
 const sharePort = ref(0)
@@ -166,14 +170,6 @@ const elapsedLabel = computed<string>(() => {
   return `${seconds.toFixed(1)}s`
 })
 
-const activityLabel = computed<string>(() => {
-  const events = activity.value
-  if (events.length === 0) return ''
-  const last = events[events.length - 1]
-  if (!last) return ''
-  return last.done ? `${last.label} ✓` : `${last.label} …`
-})
-
 const reasoningPreRef = ref<HTMLElement | null>(null)
 
 watch(
@@ -217,6 +213,52 @@ watchDebounced(
   () => void scrollConversationToBottom(),
   { debounce: 250 }
 )
+
+/** 澄清问答（ask_user 挂起式）：模型提问后 UI 挂卡片等用户回答，提交后 resolve 回 agent 循环。 */
+interface ClarificationState {
+  questions: MockClarificationQuestion[]
+  /** 点选的选项（每题至多一个，再点一次取消）。 */
+  answers: string[]
+  /** 自由输入；与点选互斥——输入即取消点选，点选即清空输入。 */
+  custom: string[]
+  resolve: (answer: string) => void
+}
+
+const clarification = ref<ClarificationState | null>(null)
+
+function selectClarifyOption(qi: number, opt: string): void {
+  const pending = clarification.value
+  if (!pending) return
+  pending.answers[qi] = pending.answers[qi] === opt ? '' : opt
+  if (pending.answers[qi]) pending.custom[qi] = ''
+}
+
+function onClarifyCustomInput(qi: number, event: Event): void {
+  const pending = clarification.value
+  if (!pending) return
+  const value = (event.target as HTMLInputElement).value
+  pending.custom[qi] = value
+  if (value.trim().length > 0) pending.answers[qi] = ''
+}
+
+function answerClarification(): void {
+  const pending = clarification.value
+  if (!pending) return
+  const lines = pending.questions.map((q, i) => {
+    const answer = (pending.custom[i] ?? '').trim() || (pending.answers[i] ?? '').trim()
+    return `${i + 1}. ${q.question}\n   回答：${answer || '（未作答，按你的最佳判断）'}`
+  })
+  // 澄清问答落进会话消息：切页重挂后这轮问答仍在，模型也看得到完整上下文
+  const state = page.value
+  if (state) {
+    state.messages.push({ role: 'user', text: lines.join('\n') })
+  }
+  clarification.value = null
+  // 新一轮开始：清掉上一轮的状态文本占位，让会话只跟当前真实进度；计时从冻结值继续
+  streamedText.value = ''
+  resumeTimer()
+  pending.resolve(lines.join('\n'))
+}
 
 let activitySeq = 0
 
@@ -286,12 +328,30 @@ function handleModelChange(event: Event) {
 }
 
 let generateTimer: ReturnType<typeof setInterval> | undefined
+let generateStartedAt = 0
 
 function stopTimer(): void {
   if (generateTimer !== undefined) {
     clearInterval(generateTimer)
     generateTimer = undefined
   }
+}
+
+function startTimer(): void {
+  stopTimer()
+  generateTimer = setInterval(() => {
+    elapsedMs.value = performance.now() - generateStartedAt
+  }, 100)
+}
+
+/** ask_user 挂起期间冻结计时：停下不走字；用户提交回答后从冻结值继续走。 */
+function pauseTimer(): void {
+  stopTimer()
+}
+
+function resumeTimer(): void {
+  generateStartedAt = performance.now() - elapsedMs.value
+  startTimer()
 }
 
 /**
@@ -363,16 +423,14 @@ async function generate() {
   generatedChars.value = 0
   reasoningText.value = ''
   activity.value = []
+  toolActivityIdx.clear()
   contentStarted = false
   lastPhase = 'analyze'
   planSteps.value = []
   pushActivity(ai.value.mockPageStepUnderstand)
   elapsedMs.value = 0
-  const startedAt = performance.now()
-  stopTimer()
-  generateTimer = setInterval(() => {
-    elapsedMs.value = performance.now() - startedAt
-  }, 100)
+  generateStartedAt = performance.now()
+  startTimer()
   const pendingFiles: Record<string, string> = { ...state.files }
   const runAgentRound = (roundPrompt: string): Promise<MockAgentResult> =>
     runMockAgent({
@@ -393,7 +451,17 @@ async function generate() {
           pendingFiles[path] = content
           state.files = { ...pendingFiles }
           schedulePreviewCompose(state.files)
-        }
+        },
+        askUser: (questions) =>
+          new Promise<string>((resolve) => {
+            pauseTimer()
+            clarification.value = {
+              questions,
+              answers: questions.map(() => ''),
+              custom: questions.map(() => ''),
+              resolve
+            }
+          })
       },
       onUpdate: {
         onTextDelta: (chunk) => {
@@ -405,24 +473,28 @@ async function generate() {
           noteContentStarted()
           reasoningText.value += chunk
         },
-        onToolInputStart: (name) => {
+        onToolInputStart: (id, name) => {
           noteContentStarted()
           finishActivity(true)
           pushActivity(name)
+          toolActivityIdx.set(id, activity.value.length - 1)
         },
-        onToolInputDelta: (name, totalBytes, deltaBytes) => {
+        onToolInputDelta: (id, name, totalBytes, deltaBytes) => {
           generatedChars.value += deltaBytes
-          const last = activity.value[activity.value.length - 1]
-          if (last && !last.done) {
-            last.label = `${name} · ${(totalBytes / 1024).toFixed(1)} KB`
+          const idx = toolActivityIdx.get(id)
+          const entry = idx === undefined ? undefined : activity.value[idx]
+          if (entry && !entry.done && name.length > 0) {
+            entry.label = `${name} · ${(totalBytes / 1024).toFixed(1)} KB`
           }
         },
         onToolStart: (name, label) => {
           noteContentStarted()
-          // 参数流阶段已推过同名活动：只升级标签，避免重复条目
-          const last = activity.value[activity.value.length - 1]
-          if (last && !last.done && last.label.startsWith(name)) {
-            last.label = label
+          // 参数流阶段已推过同名活动：只升级标签，避免重复条目（并行调用时按名字从后往前找）
+          const pending = [...activity.value]
+            .reverse()
+            .find((a) => !a.done && a.label.startsWith(name))
+          if (pending) {
+            pending.label = label
           } else {
             finishActivity(true)
             pushActivity(label)
@@ -461,6 +533,9 @@ async function generate() {
         } else if (result.fullText.trim()) {
           // 模型这一轮选择用对话回答而不是写文件：按正常回答展示，不判定为失败
           state.messages.push({ role: 'assistant', text: result.fullText.trim() })
+          if (result.reachedStepLimit) {
+            state.messages.push({ role: 'system', text: ai.value.mockPageStepLimitReached })
+          }
           return
         } else {
           errorMsg.value = ai.value.htmlPageNoHtml
@@ -482,6 +557,9 @@ async function generate() {
       process: streamedText.value || undefined,
       reasoning: reasoningText.value || undefined
     })
+    if (result.reachedStepLimit) {
+      state.messages.push({ role: 'system', text: ai.value.mockPageStepLimitReached })
+    }
   } catch (error) {
     console.warn('mock page generation failed', error)
     finishActivity(false)
@@ -496,6 +574,20 @@ async function generate() {
     stopTimer()
     generating.value = false
   }
+}
+
+function messageBubbleClass(role: MockChatMessage['role']): string {
+  if (role === 'user') return 'bg-accent text-white'
+  if (role === 'system') {
+    return 'border border-dashed border-amber-500/50 bg-amber-500/10 text-amber-300'
+  }
+  return 'bg-surface/5 text-surface'
+}
+
+function messageTestId(role: MockChatMessage['role']): string {
+  if (role === 'user') return 'mock-page-msg-user'
+  if (role === 'system') return 'mock-page-msg-system'
+  return 'mock-page-msg-assistant'
 }
 
 async function downloadProject() {
@@ -636,6 +728,13 @@ function handlePromptKeydown(event: KeyboardEvent) {
         data-test-id="mock-page-messages"
       >
         <div
+          v-if="mockPagesPersistError"
+          class="mb-2 rounded-md border border-red-500/40 bg-red-500/10 px-2.5 py-2 text-[10px] leading-relaxed text-red-400"
+          data-test-id="mock-page-persist-error"
+        >
+          {{ ai.mockPagePersistError }}
+        </div>
+        <div
           v-if="!page || page.messages.length === 0"
           class="flex h-full flex-col items-center justify-center gap-2 text-center"
         >
@@ -654,12 +753,8 @@ function handlePromptKeydown(event: KeyboardEvent) {
           >
             <div
               class="max-w-[85%] rounded-lg px-3 py-2 text-xs leading-relaxed"
-              :class="
-                message.role === 'user' ? 'bg-accent text-white' : 'bg-surface/5 text-surface'
-              "
-              :data-test-id="
-                message.role === 'user' ? 'mock-page-msg-user' : 'mock-page-msg-assistant'
-              "
+              :class="messageBubbleClass(message.role)"
+              :data-test-id="messageTestId(message.role)"
             >
               <span v-if="message.role === 'user'" class="whitespace-pre-wrap">{{
                 message.text
@@ -674,7 +769,7 @@ function handlePromptKeydown(event: KeyboardEvent) {
                   {{ ai.mockPageReasoning }}
                 </summary>
                 <pre
-                  class="mt-1 max-h-40 overflow-y-auto font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
+                  class="mt-1 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
                   >{{ message.reasoning }}</pre
                 >
               </details>
@@ -687,7 +782,7 @@ function handlePromptKeydown(event: KeyboardEvent) {
                   {{ ai.mockPageProcess }}
                 </summary>
                 <pre
-                  class="mt-1 max-h-40 overflow-y-auto font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
+                  class="mt-1 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
                   >{{ message.process }}</pre
                 >
               </details>
@@ -700,7 +795,7 @@ function handlePromptKeydown(event: KeyboardEvent) {
             >
               <div class="mb-1 flex items-center gap-2 text-muted">
                 <span class="mock-breathe inline-block size-1.5 rounded-full bg-accent"></span>
-                <span>{{ ai.htmlPageGenerating }}</span>
+                <span>{{ clarification ? ai.mockPageWaitingAnswer : ai.htmlPageGenerating }}</span>
                 <span class="tabular-nums" data-test-id="mock-page-elapsed">{{
                   elapsedLabel
                 }}</span>
@@ -746,6 +841,84 @@ function handlePromptKeydown(event: KeyboardEvent) {
                   <span class="truncate">{{ event.label }}</span>
                 </div>
               </div>
+              <div v-if="reasoningText" class="mt-1" data-test-id="mock-page-live-reasoning">
+                <button
+                  type="button"
+                  class="flex items-center gap-1.5 text-[10px] text-muted"
+                  data-test-id="mock-page-live-reasoning-toggle"
+                  @click="reasoningOpen = !reasoningOpen"
+                >
+                  <icon-lucide-brain class="size-3" />
+                  <span>{{ ai.mockPageThinking }}</span>
+                  <span>{{ reasoningOpen ? '−' : '+' }}</span>
+                </button>
+                <pre
+                  v-if="reasoningOpen"
+                  ref="reasoningPreRef"
+                  class="mt-1 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
+                  data-test-id="mock-page-live-reasoning-text"
+                  >{{ reasoningText }}<span class="mock-caret"></span
+                ></pre>
+              </div>
+              <div
+                v-if="clarification"
+                class="mt-2 rounded-xl border border-accent/30 bg-gradient-to-b from-accent/15 via-accent/5 to-transparent p-3 shadow-[0_10px_30px_rgb(0_0_0/0.45)]"
+                data-test-id="mock-page-clarification"
+              >
+                <div class="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-accent">
+                  <icon-lucide-sparkles class="size-3.5" />
+                  <span>{{ ai.mockPageClarifyTitle }}</span>
+                </div>
+                <div
+                  v-for="(q, qi) in clarification.questions"
+                  :key="qi"
+                  class="mb-2.5"
+                  :data-test-id="'mock-page-clarify-q-' + qi"
+                >
+                  <div class="mb-1 text-[11px] font-medium text-surface">
+                    {{ qi + 1 }}. {{ q.question }}
+                  </div>
+                  <div
+                    v-if="q.options && q.options.length > 0"
+                    class="mb-1 flex flex-wrap gap-1.5"
+                  >
+                    <button
+                      v-for="opt in q.options"
+                      :key="opt"
+                      type="button"
+                      class="flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] transition-colors"
+                      :class="
+                        clarification.answers[qi] === opt
+                          ? 'border-accent bg-accent text-white shadow-[0_2px_10px_rgb(0_0_0/0.4)]'
+                          : 'border-white/15 bg-white/5 text-muted hover:border-accent/60 hover:text-surface'
+                      "
+                      :data-test-id="'mock-page-clarify-opt-' + qi"
+                      @click="selectClarifyOption(qi, opt)"
+                    >
+                      <icon-lucide-check
+                        v-if="clarification.answers[qi] === opt"
+                        class="size-3"
+                      />
+                      {{ opt }}
+                    </button>
+                  </div>
+                  <input
+                    :value="clarification.custom[qi]"
+                    type="text"
+                    :placeholder="ai.mockPageClarifyInputHint"
+                    class="block w-full rounded-lg border border-white/15 bg-black/20 px-2.5 py-1.5 text-[11px] text-surface outline-none placeholder:text-muted focus:border-accent/60"
+                    :data-test-id="'mock-page-clarify-input-' + qi"
+                    @input="onClarifyCustomInput(qi, $event)"
+                  />
+                </div>
+                <AppButton
+                  size="xs"
+                  data-test-id="mock-page-clarify-submit"
+                  @click="answerClarification"
+                >
+                  {{ ai.mockPageClarifySubmit }}
+                </AppButton>
+              </div>
               <pre
                 v-if="streamedText || activeStepLabel"
                 class="mt-1 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
@@ -769,8 +942,8 @@ function handlePromptKeydown(event: KeyboardEvent) {
           <template v-else-if="voiceState === 'transcribing'">{{ ai.voiceTranscribing }}</template>
           <template v-else-if="voiceState === 'polishing'">{{ ai.voicePolishing }}</template>
           <template v-else
-            >{{ ai.htmlPageGenerating }} · {{ elapsedLabel }} ·
-            {{ generatedChars }}</template
+            >{{ clarification ? ai.mockPageWaitingAnswer : ai.htmlPageGenerating }} ·
+            {{ elapsedLabel }} · {{ generatedChars }}</template
           >
         </div>
         <div class="flex items-end gap-2">
@@ -1062,51 +1235,6 @@ function handlePromptKeydown(event: KeyboardEvent) {
               class="min-h-0 flex-1 overflow-auto rounded-lg border border-white/10 bg-black/30 p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-surface/80"
               data-test-id="mock-page-code-view"
               >{{ generating ? streamedText : activeFileContent }}</pre>
-          </div>
-        </div>
-        <div
-          v-if="generating"
-          class="pointer-events-none absolute inset-x-0 top-3 z-10 flex flex-col items-center gap-2 px-4"
-          data-test-id="mock-page-gen-overlay"
-        >
-          <div
-            class="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-accent/40 bg-[#1a1c20]/95 px-4 py-1.5 shadow-lg"
-            data-test-id="mock-page-gen-pill"
-          >
-            <span class="mock-breathe inline-block size-2 rounded-full bg-accent"></span>
-            <span class="text-xs text-surface">{{ ai.htmlPageGenerating }}</span>
-            <span class="text-[10px] text-muted tabular-nums" data-test-id="mock-page-elapsed">{{
-              elapsedLabel
-            }}</span>
-            <span class="h-3 w-px bg-white/10"></span>
-            <span
-              class="max-w-56 truncate text-[10px] text-muted"
-              data-test-id="mock-page-activity"
-              >{{ activityLabel }}</span
-            >
-          </div>
-          <div
-            v-if="reasoningText"
-            class="pointer-events-auto w-full max-w-md overflow-hidden rounded-lg border border-white/10 bg-[#1a1c20]/95 shadow-lg"
-            data-test-id="mock-page-reasoning"
-          >
-            <button
-              type="button"
-              class="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-[10px] text-muted"
-              data-test-id="mock-page-reasoning-toggle"
-              @click="reasoningOpen = !reasoningOpen"
-            >
-              <icon-lucide-brain class="size-3" />
-              <span>{{ ai.mockPageThinking }}</span>
-              <span class="ml-auto">{{ reasoningOpen ? '−' : '+' }}</span>
-            </button>
-            <pre
-              v-if="reasoningOpen"
-              ref="reasoningPreRef"
-              class="max-h-40 overflow-y-auto border-t border-white/10 px-3 py-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
-              data-test-id="mock-page-reasoning-text"
-              >{{ reasoningText }}<span v-if="generating" class="mock-caret"></span
-            ></pre>
           </div>
         </div>
       </div>

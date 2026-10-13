@@ -161,9 +161,7 @@ function toolDisplayName(part: ToolPart): string {
     const zh = TOOL_NAME_ZH[name]
     if (zh) return zh
   }
-  return name
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
+  return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 function hasErrorOutput(part: ToolPart): boolean {

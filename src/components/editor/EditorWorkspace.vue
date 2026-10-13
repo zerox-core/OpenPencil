@@ -92,27 +92,29 @@ onBeforeUnmount(() => {
 
 <template>
   <SplitterGroup
-    v-if="!isMobile && showChrome && store.state.showUI"
+    v-if="!isMobile && showChrome && (store.state.showUI || mockMode)"
     :key="(activeTab?.id ?? '') + ':' + (mockMode ? 'mock' : 'design')"
     direction="horizontal"
     class="flex-1 overflow-hidden"
     @layout="saveEditorLayout"
   >
-    <SplitterPanel
-      id="layers"
-      :default-size="initialEditorLayout[0]"
-      :min-size="10"
-      :max-size="30"
-      class="flex"
-    >
-      <LayersPanel />
-    </SplitterPanel>
-    <SplitterResizeHandle
-      data-test-id="left-splitter-handle"
-      :class="horizontalSplitterStyles.handle()"
-    >
-      <div :class="horizontalSplitterStyles.divider()" />
-    </SplitterResizeHandle>
+    <template v-if="!mockMode || store.state.showUI">
+      <SplitterPanel
+        id="layers"
+        :default-size="initialEditorLayout[0]"
+        :min-size="10"
+        :max-size="30"
+        class="flex"
+      >
+        <LayersPanel />
+      </SplitterPanel>
+      <SplitterResizeHandle
+        data-test-id="left-splitter-handle"
+        :class="horizontalSplitterStyles.handle()"
+      >
+        <div :class="horizontalSplitterStyles.divider()" />
+      </SplitterResizeHandle>
+    </template>
     <SplitterPanel
       id="canvas"
       :default-size="mockMode ? undefined : initialEditorLayout[1]"
@@ -121,6 +123,18 @@ onBeforeUnmount(() => {
     >
       <div v-if="mockMode" class="relative flex min-w-0 flex-1">
         <MockPageWorkspace v-if="mockWorkspaceReady" />
+        <div
+          v-if="!store.state.showUI"
+          class="absolute top-3 left-3 z-20 flex items-center gap-2 rounded-lg border border-border bg-panel px-2 py-1 shadow-sm"
+        >
+          <IconButton
+            :label="editor.showUI({ shortcut: formatShortcut(appMenuShortcut('toggle-ui')) ?? '' })"
+            data-test-id="mock-show-ui"
+            @click="store.state.showUI = true"
+          >
+            <icon-lucide-sidebar class="size-3.5" />
+          </IconButton>
+        </div>
         <Transition name="mock-hot-fade">
           <div
             v-if="!mockHotLoaded"
@@ -179,7 +193,7 @@ onBeforeUnmount(() => {
   </div>
 
   <div
-    v-else-if="showChrome"
+    v-else-if="showChrome && !mockMode"
     :key="'collapsed-' + activeTab?.id"
     class="flex flex-1 overflow-hidden"
   >

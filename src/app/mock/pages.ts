@@ -1,11 +1,16 @@
-import { reactive, watch } from 'vue'
+import { reactive, ref, watch, type WatchStopHandle } from 'vue'
 
 import type { PluginDataEntry, SceneNode } from '@open-pencil/scene-graph'
 
-import { readMockPagesStorage, writeMockPagesStorage } from './storage'
+import {
+  listMockPageStorageIds,
+  migrateMockPagesStorage,
+  readMockPageStorage,
+  writeMockPageStorage
+} from './storage'
 
 export interface MockChatMessage {
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'system'
   text: string
   /** Full streamed narration from the generation round (collapsible in the bubble). */
   process?: string
@@ -74,7 +79,7 @@ function sanitizeMessages(value: unknown): MockChatMessage[] {
   for (const item of value) {
     if (!item || typeof item !== 'object') continue
     const message = item as Partial<MockChatMessage>
-    if (message.role !== 'user' && message.role !== 'assistant') continue
+    if (message.role !== 'user' && message.role !== 'assistant' && message.role !== 'system') continue
     if (typeof message.text !== 'string') continue
     const clean: MockChatMessage = { role: message.role, text: message.text }
     if (typeof message.process === 'string' && message.process) clean.process = message.process
@@ -98,43 +103,66 @@ function sanitizeFiles(value: unknown): Record<string, string> {
   return files
 }
 
+function sanitizeState(value: unknown): MockPageState | null {
+  if (!value || typeof value !== 'object') return null
+  const state = value as Partial<MockPageState>
+  return {
+    html: typeof state.html === 'string' ? state.html : '',
+    files: sanitizeFiles(state.files),
+    width:
+      typeof state.width === 'number' && state.width > 0
+        ? state.width
+        : MOCK_PAGE_SIZES.desktop.width,
+    height:
+      typeof state.height === 'number' && state.height > 0
+        ? state.height
+        : MOCK_PAGE_SIZES.desktop.height,
+    messages: sanitizeMessages(state.messages)
+  }
+}
+
 function loadRegistry(): MockPageRegistry {
-  const parsed = readMockPagesStorage()
-  if (!parsed || typeof parsed !== 'object') return {}
+  migrateMockPagesStorage()
   const registry: MockPageRegistry = {}
-  for (const [mockId, value] of Object.entries(parsed)) {
-    if (!value || typeof value !== 'object') continue
-    const state = value as Partial<MockPageState>
-    registry[mockId] = {
-      html: typeof state.html === 'string' ? state.html : '',
-      files: sanitizeFiles(state.files),
-      width:
-        typeof state.width === 'number' && state.width > 0
-          ? state.width
-          : MOCK_PAGE_SIZES.desktop.width,
-      height:
-        typeof state.height === 'number' && state.height > 0
-          ? state.height
-          : MOCK_PAGE_SIZES.desktop.height,
-      messages: sanitizeMessages(state.messages)
-    }
+  for (const mockId of listMockPageStorageIds()) {
+    const state = sanitizeState(readMockPageStorage(mockId))
+    if (state) registry[mockId] = state
   }
   return registry
 }
 
 const registry = reactive<MockPageRegistry>(loadRegistry())
 
-watch(
-  registry,
-  (value) => {
-    try {
-      writeMockPagesStorage(value)
-    } catch (error) {
-      console.warn('mock page registry persist failed', error)
-    }
-  },
-  { deep: true }
-)
+/** 最近一次持久化写入失败时为 true；UI 据此向用户提示保存失败。 */
+export const mockPagesPersistError = ref(false)
+
+const stateWatchers = new Map<string, WatchStopHandle>()
+
+function persistState(mockId: string, state: MockPageState): void {
+  try {
+    writeMockPageStorage(mockId, state)
+    mockPagesPersistError.value = false
+  } catch (error) {
+    console.warn(`mock page persist failed: ${mockId}`, error)
+    mockPagesPersistError.value = true
+  }
+}
+
+/** 给单个 mock 页挂深度 watcher：该页任何变更（含流式追加的消息）立即持久化。 */
+function watchState(mockId: string): void {
+  if (stateWatchers.has(mockId)) return
+  const state = registry[mockId]
+  const stop = watch(
+    state,
+    (value) => persistState(mockId, value),
+    { deep: true }
+  )
+  stateWatchers.set(mockId, stop)
+}
+
+for (const mockId of Object.keys(registry)) {
+  watchState(mockId)
+}
 
 export function isMockPage(node: PluginDataCarrier): boolean {
   return getMockPageId(node) !== null
@@ -155,6 +183,8 @@ export function ensureMockPage(mockId: string): MockPageState {
     messages: []
   }
   registry[mockId] = created
+  watchState(mockId)
+  persistState(mockId, created)
   return created
 }
 

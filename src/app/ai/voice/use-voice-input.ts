@@ -78,9 +78,7 @@ export function useVoiceInput(target: Ref<string>, onDone?: () => void) {
       return
     }
     const mimeType = pickAudioMimeType()
-    const recorder = mimeType
-      ? new MediaRecorder(stream, { mimeType })
-      : new MediaRecorder(stream)
+    const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
     recordedChunks = []
     voiceBaseText = target.value
     recorder.ondataavailable = (event) => {

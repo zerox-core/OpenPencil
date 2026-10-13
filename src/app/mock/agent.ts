@@ -38,18 +38,31 @@ import type { LanguageModel } from 'ai'
  * 当前阶段的工具；每一步通过 prepareStep instructions 把管线状态注入模型。
  */
 
+/** ask_user 工具的单个澄清问题：question 必填，options 为可选项（2~4 个）。 */
+export interface MockClarificationQuestion {
+  question: string
+  options?: string[]
+}
+
 export interface MockAgentHandlers {
   setCanvasSize(width: number, height: number): void
   writeProjectFile(path: string, content: string): void
+  /**
+   * 需求澄清反向通道（挂起式）：模型经 ask_user 工具发起提问，本 handler 返回的
+   * Promise 由 UI 在用户回答后 resolve——循环挂起等待但流不中断、管线状态保留，
+   * 回答作为工具结果直接进入当前对话（上下文连续，无需 messages 历史）。
+   * 未提供时 ask_user 降级返回提示，让模型按最佳判断继续。
+   */
+  askUser?(questions: MockClarificationQuestion[]): Promise<string>
 }
 
 export interface MockAgentUpdate {
   onTextDelta?(text: string): void
   onReasoningDelta?(text: string): void
-  /** 工具输入（参数）开始流式生成——参数尚未生成完即通知，给 UI 提前可见性。 */
-  onToolInputStart?(name: string): void
-  /** 工具输入流增量：totalBytes 为该工具参数已累计字节数，deltaBytes 为本次增量。 */
-  onToolInputDelta?(name: string, totalBytes: number, deltaBytes: number): void
+  /** 工具输入（参数）开始流式生成——参数尚未生成完即通知，给 UI 提前可见性。id 为 toolCallId。 */
+  onToolInputStart?(id: string, name: string): void
+  /** 工具输入流增量：totalBytes 为该工具参数已累计字节数，deltaBytes 为本次增量。id 为 toolCallId（delta 不携带 toolName，按 id 对应）。 */
+  onToolInputDelta?(id: string, name: string, totalBytes: number, deltaBytes: number): void
   onToolStart?(name: string, label: string): void
   onToolDone?(name: string, label: string, ok: boolean): void
   onPipelineChange?(snapshot: MockPipelineSnapshot): void
@@ -61,9 +74,11 @@ export interface MockAgentResult {
   filesWritten: number
   /** 收尾时的管线快照（阶段 / 规范类型 / 计划），供视觉自查等下游环节使用。 */
   pipeline: MockPipelineSnapshot
+  /** 本轮未走到 finish_project 即正常终止（步数上限或模型停笔）。true 时 UI 提示用户发送「继续」。 */
+  reachedStepLimit: boolean
 }
 
-export const MOCK_AGENT_MAX_STEPS = 48
+export const MOCK_AGENT_MAX_STEPS = 200
 
 // 场景提示词已沉淀为可配置模板（mock/prompts.ts），按 options.promptTemplateId 解析，默认 website。
 
@@ -79,6 +94,9 @@ function textValue(value: unknown): string {
 
 export function describeToolCall(name: string, input: unknown): string {
   if (!isRecord(input)) return name
+  if (name === 'ask_user' && Array.isArray(input.questions)) {
+    return `${name} · ${input.questions.length} 问`
+  }
   if (name === 'write_project_file') return `${name} · ${textValue(input.path)}`
   if (name === 'set_canvas_size') {
     return `${name} · ${textValue(input.width)}×${textValue(input.height)}`
@@ -213,14 +231,17 @@ function forwardToolEvent(part: MockStreamPart, onUpdate: MockAgentUpdate | unde
 function forwardToolInputEvent(
   part: MockStreamPart,
   inputBytes: Map<string, number>,
+  inputNames: Map<string, string>,
   encoder: TextEncoder,
   onUpdate: MockAgentUpdate | undefined
 ): void {
   if (part.type === 'tool-input-start') {
     const name = typeof part.toolName === 'string' ? part.toolName : ''
     if (name.length === 0) return
-    inputBytes.set(part.id ?? name, 0)
-    onUpdate?.onToolInputStart?.(name)
+    const id = part.id ?? name
+    inputBytes.set(id, 0)
+    inputNames.set(id, name)
+    onUpdate?.onToolInputStart?.(id, name)
     return
   }
   if (part.type !== 'tool-input-delta') return
@@ -230,7 +251,8 @@ function forwardToolInputEvent(
   const deltaBytes = encoder.encode(delta).length
   const total = (inputBytes.get(key) ?? 0) + deltaBytes
   inputBytes.set(key, total)
-  onUpdate?.onToolInputDelta?.(part.toolName ?? '', total, deltaBytes)
+  // tool-input-delta 不携带 toolName：按 toolCallId 从 input-start 的登记里取回
+  onUpdate?.onToolInputDelta?.(key, inputNames.get(key) ?? '', total, deltaBytes)
 }
 
 /** 消费 agent 流：把文本 / 推理 / 工具事件转发给 onUpdate，并回报管线快照。 */
@@ -242,6 +264,7 @@ async function consumeMockStream(
   let fullText = ''
   const encoder = new TextEncoder()
   const inputBytes = new Map<string, number>()
+  const inputNames = new Map<string, string>()
   for await (const part of stream.fullStream) {
     if (part.type === 'text-delta' && typeof part.text === 'string') {
       fullText += part.text
@@ -249,7 +272,7 @@ async function consumeMockStream(
     } else if (part.type === 'reasoning-delta' && typeof part.text === 'string') {
       onUpdate?.onReasoningDelta?.(part.text)
     } else if (part.type === 'tool-input-start' || part.type === 'tool-input-delta') {
-      forwardToolInputEvent(part, inputBytes, encoder, onUpdate)
+      forwardToolInputEvent(part, inputBytes, inputNames, encoder, onUpdate)
     } else if (
       typeof part.toolName === 'string' &&
       (part.type === 'tool-call' || part.type === 'tool-result')
@@ -285,6 +308,34 @@ export async function runMockAgent(options: {
   const systemPrompt = composeMockSystemPrompt(resolveMockPromptTemplate(options.promptTemplateId))
 
   const tools = {
+    ask_user: tool({
+      description:
+        '需求澄清：当用户需求模糊、存在多个明显不同的合理方向，或有影响整体方向的关键抉择（目标受众 / 风格取向 / 核心板块 / 平台形态等）时，先向用户提问再继续。一次最多 3 个问题，每题可附 2~4 个选项供快速点选。需求已经足够具体时不要使用——不为确认而确认。',
+      inputSchema: valibotSchema(
+        v.object({
+          questions: v.pipe(
+            v.array(
+              v.object({
+                question: v.pipe(v.string(), v.minLength(1)),
+                options: v.optional(v.array(v.pipe(v.string(), v.minLength(1))))
+              })
+            ),
+            v.minLength(1),
+            v.maxLength(3)
+          )
+        })
+      ),
+      execute: async ({ questions }) => {
+        if (!options.handlers.askUser) {
+          return {
+            ok: false,
+            error: '当前环境无法向用户提问：按你的最佳判断继续，并在收尾总结里说明所做的关键假设'
+          }
+        }
+        const answer = await options.handlers.askUser(questions)
+        return { ok: true, answer }
+      }
+    }),
     get_design_norms: tool({
       description:
         '取回目标平台的设计规范（画布尺寸 / 栅格 / 间距刻度 / 字号阶梯 / 圆角刻度 / 配色准则 / 结构准则）。规划与搭建都必须以它为准。',
@@ -443,7 +494,6 @@ export async function runMockAgent(options: {
     prompt: userContent,
     tools,
     stopWhen: stepCountIs(options.maxSteps ?? MOCK_AGENT_MAX_STEPS),
-    maxOutputTokens: 32768,
     providerOptions: buildReasoningProviderOptions(options.providerID, options.reasoningEffort),
     prepareStep: () => ({
       activeTools: PHASE_TOOLS[state.phase] as (keyof typeof tools)[],
@@ -457,6 +507,7 @@ export async function runMockAgent(options: {
     fullText,
     summary: finishSummary || fullText.trim(),
     filesWritten,
-    pipeline: pipelineSnapshot(state)
+    pipeline: pipelineSnapshot(state),
+    reachedStepLimit: state.phase !== 'done'
   }
 }

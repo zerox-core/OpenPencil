@@ -60,10 +60,10 @@ export function createMockPipeline(): MockPipelineState {
 
 /** 各阶段对模型暴露的工具集（按阶段动态暴露，省 token 且强制走流程）。 */
 export const PHASE_TOOLS: Record<MockPipelinePhase, string[]> = {
-  analyze: ['get_design_norms', 'search_similar_designs', 'declare_project_kind'],
-  plan: ['plan_steps', 'get_design_norms', 'search_similar_designs'],
-  skeleton: ['set_canvas_size', 'write_project_file', 'check_project', 'submit_skeleton'],
-  refine: ['set_canvas_size', 'write_project_file', 'mark_step_done', 'check_project', 'finish_project'],
+  analyze: ['ask_user', 'get_design_norms', 'search_similar_designs', 'declare_project_kind'],
+  plan: ['ask_user', 'plan_steps', 'get_design_norms', 'search_similar_designs'],
+  skeleton: ['ask_user', 'set_canvas_size', 'write_project_file', 'check_project', 'submit_skeleton'],
+  refine: ['ask_user', 'set_canvas_size', 'write_project_file', 'mark_step_done', 'check_project', 'finish_project'],
   done: []
 }
 

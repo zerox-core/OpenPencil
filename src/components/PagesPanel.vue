@@ -19,12 +19,7 @@ import type { SceneNode } from '@open-pencil/scene-graph'
 import { PageListRoot, useFlatReorderDrag, useI18n, useInlineRename } from '@open-pencil/vue'
 
 import { useEditorStore } from '@/app/editor/active-store'
-import {
-  createMockId,
-  ensureMockPage,
-  isMockPage,
-  withMockPagePluginData
-} from '@/app/mock/pages'
+import { createMockId, ensureMockPage, isMockPage, withMockPagePluginData } from '@/app/mock/pages'
 import IconButton from '@/components/ui/button/IconButton.vue'
 import { useMenuUI } from '@/components/ui/menu/menu'
 import pageListTheme from '@/theme/page-list'

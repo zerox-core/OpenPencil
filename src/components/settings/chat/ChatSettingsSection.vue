@@ -92,7 +92,9 @@ const options = computed(() => [
       <SettingsRow
         :label="ai.voiceAsrApiKey"
         :description="
-          voiceAsrKeyStatus === 'configured' ? ai.voiceAsrKeyConfigured : ai.voiceAsrKeyNotConfigured
+          voiceAsrKeyStatus === 'configured'
+            ? ai.voiceAsrKeyConfigured
+            : ai.voiceAsrKeyNotConfigured
         "
         class="max-sm:flex-col max-sm:items-stretch"
       >
