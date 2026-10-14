@@ -148,10 +148,13 @@ function checkProject(files: Record<string, string>): { ok: boolean; issues: str
     let match: RegExpExecArray | null
     while ((match = refRe.exec(entry)) !== null) {
       const ref = match[1]
-      if (/^(https?:|data:|mailto:|tel:|#|\/)/i.test(ref)) continue
-      const clean = ref.split('#')[0].split('?')[0].trim()
+      if (/^(https?:|data:|mailto:|tel:|javascript:)/i.test(ref)) continue
+      if (ref === '#' || ref.startsWith('#')) continue
+      const clean = ref.split('#')[0].split('?')[0].replace(/^\.?\//, '').trim()
       if (!clean) continue
-      if (!(clean in files)) blocking.push(`index.html 引用了不存在的文件：${clean}`)
+      if (!(clean in files) && !(ref in files)) {
+        blocking.push(`index.html 引用了不存在的文件或死链路由：${ref}（请在单页内使用 JS 状态机/Tab/弹窗实现对应功能，严禁死链跳转）`)
+      }
     }
   }
   for (const [path, content] of Object.entries(files)) {
