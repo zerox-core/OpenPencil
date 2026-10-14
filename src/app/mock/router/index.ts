@@ -174,3 +174,97 @@ export function executeFastConsultStream(options: {
     providerOptions: buildReasoningProviderOptions(options.providerID, options.reasoningEffort)
   })
 }
+
+export interface FastTrackDispatchOptions {
+  model: LanguageModel
+  providerID: AIProviderID
+  reasoningEffort: string
+  userPrompt: string
+  hasProject: boolean
+  fileList: string[]
+  files: Record<string, string>
+  entryFile: string
+  onTextDelta: (chunk: string) => void
+}
+
+export interface FastTrackDispatchResult {
+  handled: boolean
+  track: 'consult' | 'patch' | 'workflow'
+  assistantMessage?: string
+  patchedFiles?: Record<string, string>
+}
+
+/**
+ * 尝试执行快轨拦截与调度。如果成功命中出口 A 或 B 则直接交付，否则交回主循环。
+ */
+export async function tryFastTrackDispatch(
+  options: FastTrackDispatchOptions
+): Promise<FastTrackDispatchResult> {
+  const verdict = await routeMockIntent({
+    model: options.model,
+    providerID: options.providerID,
+    reasoningEffort: options.reasoningEffort,
+    userPrompt: options.userPrompt,
+    hasProject: options.hasProject,
+    fileList: options.fileList
+  })
+
+  // 出口 A：问候闲聊与设计咨询快轨
+  if (verdict.track === 'consult') {
+    let fullText = ''
+    const consultStream = executeFastConsultStream({
+      model: options.model,
+      providerID: options.providerID,
+      reasoningEffort: options.reasoningEffort,
+      userPrompt: options.userPrompt,
+      vfsSummary: options.fileList.length > 0 ? options.fileList.join(', ') : undefined
+    })
+
+    for await (const chunk of consultStream.textStream) {
+      fullText += chunk
+      options.onTextDelta(chunk)
+    }
+
+    return {
+      handled: true,
+      track: 'consult',
+      assistantMessage: fullText
+    }
+  }
+
+  // 出口 B：单点局部微调快轨
+  if (verdict.track === 'patch' && options.hasProject) {
+    const target = verdict.targetFile && Object.hasOwn(options.files, verdict.targetFile)
+      ? verdict.targetFile
+      : options.entryFile
+    const currentCode = options.files[target]
+    if (currentCode) {
+      const patchRes = await executeFastPatch({
+        model: options.model,
+        providerID: options.providerID,
+        reasoningEffort: options.reasoningEffort,
+        userPrompt: options.userPrompt,
+        targetFile: target,
+        fileContent: currentCode
+      })
+
+      if (patchRes.ok) {
+        return {
+          handled: true,
+          track: 'patch',
+          assistantMessage: patchRes.summary,
+          patchedFiles: {
+            ...options.files,
+            [target]: patchRes.patchedContent
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    handled: false,
+    track: 'workflow'
+  }
+}
+

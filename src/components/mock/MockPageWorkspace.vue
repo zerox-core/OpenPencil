@@ -17,6 +17,7 @@ import { saveExportedFile } from '@/app/document/export/files'
 import { downloadBlob } from '@/app/document/io/browser'
 import { useEditorStore } from '@/app/editor/active-store'
 import { runMockAgent, type MockAgentResult, type MockClarificationQuestion } from '@/app/mock/agent'
+import { tryFastTrackDispatch } from '@/app/mock/router'
 import type { MockPipelineSnapshot } from '@/app/mock/pipeline'
 import {
   MOCK_PAGE_SIZES,
@@ -406,6 +407,69 @@ async function reviewGeneratedPage(
   return `视觉自查发现问题，第 ${result.fixRounds} 轮自动修复未完成，可继续追加要求`
 }
 
+function recordAssistantSuccessMessage(
+  state: MockPageState,
+  result: MockAgentResult,
+  reviewNote: string | null,
+  streamed: string,
+  reasoning: string,
+  doneLabel: string,
+  limitLabel: string
+): void {
+  const note = reviewNote ? `${result.summary}\n${reviewNote}` : result.summary || doneLabel
+  state.messages.push({
+    role: 'assistant',
+    text: note,
+    process: streamed || undefined,
+    reasoning: reasoning || undefined
+  })
+  if (result.reachedStepLimit) {
+    state.messages.push({ role: 'system', text: limitLabel })
+  }
+}
+
+function recordAssistantErrorMessage(
+  state: MockPageState,
+  streamed: string,
+  reasoning: string,
+  failLabel: string
+): void {
+  state.messages.push({
+    role: 'assistant',
+    text: failLabel,
+    process: streamed || undefined,
+    reasoning: reasoning || undefined
+  })
+}
+
+async function applyFallbackUnwrittenFiles(
+  state: MockPageState,
+  result: MockAgentResult
+): Promise<{ ok: boolean; dialogOnly?: boolean }> {
+  if (result.filesWritten > 0) return { ok: true }
+  const parsedFiles = parseProjectFiles(result.fullText)
+  if (Object.keys(parsedFiles).length > 0) {
+    const composed = await composeMockProjectPreview(parsedFiles)
+    if (!composed) return { ok: false }
+    state.files = parsedFiles
+    state.html = composed
+    return { ok: true }
+  }
+
+  const single = extractHTML(result.fullText)
+  if (single) {
+    state.files = {}
+    state.html = single
+    return { ok: true }
+  }
+
+  if (result.fullText.trim()) {
+    return { ok: false, dialogOnly: true }
+  }
+
+  return { ok: false }
+}
+
 async function generate() {
   const state = page.value
   const text = prompt.value.trim()
@@ -513,63 +577,71 @@ async function generate() {
       }
     })
   try {
-    const result = await runAgentRound(text)
-    if (result.filesWritten === 0) {
-      const parsedFiles = parseProjectFiles(result.fullText)
-      if (Object.keys(parsedFiles).length > 0) {
-        const composed = await composeMockProjectPreview(parsedFiles)
-        if (!composed) {
-          errorMsg.value = ai.value.htmlPageNoHtml
-          state.messages.push({ role: 'assistant', text: ai.value.htmlPageNoHtml })
-          return
-        }
-        state.files = parsedFiles
-        state.html = composed
-      } else {
-        const single = extractHTML(result.fullText)
-        if (single) {
-          state.files = {}
-          state.html = single
-        } else if (result.fullText.trim()) {
-          // 模型这一轮选择用对话回答而不是写文件：按正常回答展示，不判定为失败
-          state.messages.push({ role: 'assistant', text: result.fullText.trim() })
-          if (result.reachedStepLimit) {
-            state.messages.push({ role: 'system', text: ai.value.mockPageStepLimitReached })
-          }
-          return
-        } else {
-          errorMsg.value = ai.value.htmlPageNoHtml
-          state.messages.push({ role: 'assistant', text: ai.value.htmlPageNoHtml })
-          return
-        }
+    const fastRes = await tryFastTrackDispatch({
+      model: runtime.model,
+      providerID: runtime.role.connection.providerID,
+      reasoningEffort: runtime.role.profile.reasoningEffort ?? '',
+      userPrompt: text,
+      hasProject: hasPage.value,
+      fileList: fileList.value,
+      files: state.files,
+      entryFile: entryFile.value,
+      onTextDelta: (chunk) => {
+        noteContentStarted()
+        streamedText.value += chunk
+        generatedChars.value += chunk.length
       }
+    })
+
+    if (fastRes.handled) {
+      finishActivity(true)
+      if (fastRes.patchedFiles) {
+        state.files = fastRes.patchedFiles
+        schedulePreviewCompose(state.files)
+      }
+      state.messages.push({
+        role: 'assistant',
+        text: fastRes.assistantMessage || streamedText.value
+      })
+      return
     }
-    view.value = 'preview'
-    const reviewNote = await reviewGeneratedPage(state, text, result, runAgentRound)
+
+    const result = await runAgentRound(text)
+    const fallback = await applyFallbackUnwrittenFiles(state, result)
+    if (!fallback.ok) {
+      if (fallback.dialogOnly) {
+        state.messages.push({ role: 'assistant', text: result.fullText.trim() })
+        if (result.reachedStepLimit) {
+          state.messages.push({ role: 'system', text: ai.value.mockPageStepLimitReached })
+        }
+        return
+      }
+      errorMsg.value = ai.value.htmlPageNoHtml
+      state.messages.push({ role: 'assistant', text: ai.value.htmlPageNoHtml })
+      return
+    }
     finishActivity(true)
     pushActivity(ai.value.mockPageStepFinish)
     finishActivity(true)
-    state.messages.push({
-      role: 'assistant',
-      text: reviewNote
-        ? `${result.summary}\n${reviewNote}`
-        : result.summary || ai.value.mockPageAssistantDone,
-      process: streamedText.value || undefined,
-      reasoning: reasoningText.value || undefined
-    })
-    if (result.reachedStepLimit) {
-      state.messages.push({ role: 'system', text: ai.value.mockPageStepLimitReached })
-    }
+    recordAssistantSuccessMessage(
+      state,
+      result,
+      reviewNote,
+      streamedText.value,
+      reasoningText.value,
+      ai.value.mockPageAssistantDone,
+      ai.value.mockPageStepLimitReached
+    )
   } catch (error) {
     console.warn('mock page generation failed', error)
     finishActivity(false)
     errorMsg.value = ai.value.htmlPageFailed
-    state.messages.push({
-      role: 'assistant',
-      text: ai.value.htmlPageFailed,
-      process: streamedText.value || undefined,
-      reasoning: reasoningText.value || undefined
-    })
+    recordAssistantErrorMessage(
+      state,
+      streamedText.value,
+      reasoningText.value,
+      ai.value.htmlPageFailed
+    )
   } finally {
     stopTimer()
     generating.value = false
