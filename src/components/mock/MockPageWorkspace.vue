@@ -129,6 +129,37 @@ const currentSource = computed<string>(() => {
   return state.html
 })
 
+const chatWidth = ref(440)
+const chatViewMode = ref<'split' | 'chat_only' | 'preview_only'>('split')
+const messageQueue = ref<string[]>([])
+const isDraggingSplitter = ref(false)
+
+let dragStartX = 0
+let dragStartW = 0
+
+function startSplitterDrag(e: MouseEvent) {
+  isDraggingSplitter.value = true
+  dragStartX = e.clientX
+  dragStartW = chatWidth.value
+}
+
+useEventListener('mousemove', (ev: MouseEvent) => {
+  if (!isDraggingSplitter.value) return
+  const delta = ev.clientX - dragStartX
+  const newW = Math.max(320, Math.min(window.innerWidth - 360, dragStartW + delta))
+  chatWidth.value = newW
+})
+
+useEventListener('mouseup', () => {
+  if (isDraggingSplitter.value) {
+    isDraggingSplitter.value = false
+  }
+})
+
+function removeQueuedMessage(index: number) {
+  messageQueue.value.splice(index, 1)
+}
+
 const stageRef = ref<HTMLElement | null>(null)
 const { width: stageWidth, height: stageHeight } = useElementSize(stageRef)
 
@@ -714,6 +745,15 @@ async function generate() {
   } finally {
     stopTimer()
     generating.value = false
+    if (messageQueue.value.length > 0) {
+      const nextPrompt = messageQueue.value.shift()
+      if (nextPrompt) {
+        prompt.value = nextPrompt
+        setTimeout(() => {
+          void generate()
+        }, 80)
+      }
+    }
   }
 }
 
@@ -853,43 +893,97 @@ onBeforeUnmount(() => {
   }
 })
 
-function handlePromptKeydown(event: KeyboardEvent) {
-  if (event.code !== 'Enter' || event.shiftKey || event.isComposing) return
-  event.preventDefault()
+function handleSendAction() {
+  const text = prompt.value.trim()
+  if (!text) return
   if (clarification.value) {
-    submitClarificationFreeText(prompt.value)
+    submitClarificationFreeText(text)
+    return
+  }
+  if (generating.value) {
+    messageQueue.value.push(text)
+    prompt.value = ''
     return
   }
   void generate()
 }
+
+function handlePromptKeydown(event: KeyboardEvent) {
+  if (event.code !== 'Enter' || event.shiftKey || event.isComposing) return
+  event.preventDefault()
+  handleSendAction()
+}
 </script>
 
 <template>
-  <div class="flex min-w-0 flex-1" data-test-id="mock-page-workspace">
-    <div class="flex w-[340px] shrink-0 flex-col border-r border-border bg-panel">
+  <div class="flex min-w-0 flex-1 relative overflow-hidden" data-test-id="mock-page-workspace">
+    <div
+      v-show="chatViewMode !== 'preview_only'"
+      class="flex shrink-0 flex-col border-r border-border bg-panel relative"
+      :style="{
+        width: chatViewMode === 'chat_only' ? '100%' : `${chatWidth}px`,
+        flex: chatViewMode === 'chat_only' ? '1 1 0%' : 'none'
+      }"
+    >
+      <div class="flex h-10 shrink-0 items-center justify-between border-b border-border/60 px-3 bg-panel/70">
+        <div class="flex items-center gap-1.5 text-xs font-semibold text-surface">
+          <icon-lucide-sparkles class="size-3.5 text-accent" />
+          <span>AI 设计工坊</span>
+        </div>
+        <div class="flex items-center rounded-md bg-surface/5 p-0.5 border border-border/40 text-[11px]">
+          <button
+            type="button"
+            class="rounded px-2 py-0.5 transition-colors"
+            :class="chatViewMode === 'chat_only' ? 'bg-accent text-white font-medium shadow-xs' : 'text-surface/70 hover:text-surface'"
+            title="纯会话专注模式（宽屏排版）"
+            @click="chatViewMode = 'chat_only'"
+          >
+            纯会话
+          </button>
+          <button
+            type="button"
+            class="rounded px-2 py-0.5 transition-colors"
+            :class="chatViewMode === 'split' ? 'bg-accent text-white font-medium shadow-xs' : 'text-surface/70 hover:text-surface'"
+            title="双栏分栏对照"
+            @click="chatViewMode = 'split'"
+          >
+            分栏
+          </button>
+          <button
+            type="button"
+            class="rounded px-2 py-0.5 transition-colors"
+            :class="chatViewMode === 'preview_only' ? 'bg-accent text-white font-medium shadow-xs' : 'text-surface/70 hover:text-surface'"
+            title="仅看画布预览"
+            @click="chatViewMode = 'preview_only'"
+          >
+            预览
+          </button>
+        </div>
+      </div>
       <div
         ref="messagesRef"
         class="min-h-0 flex-1 overflow-y-auto p-3"
         data-test-id="mock-page-messages"
       >
-        <div
-          v-if="mockPagesPersistError"
-          class="mb-2 rounded-md border border-red-500/40 bg-red-500/10 px-2.5 py-2 text-[10px] leading-relaxed text-red-400"
-          data-test-id="mock-page-persist-error"
-        >
-          {{ ai.mockPagePersistError }}
-        </div>
-        <div
-          v-if="!page || page.messages.length === 0"
-          class="flex h-full flex-col items-center justify-center gap-2 text-center"
-        >
-          <icon-lucide-sparkles class="size-6 text-muted/50" />
-          <p class="text-xs text-muted">{{ ai.mockPageEmptyTitle }}</p>
-          <p class="max-w-60 text-[10px] leading-relaxed text-muted/60">
-            {{ ai.mockPageEmptyHint }}
-          </p>
-        </div>
-        <template v-else>
+        <div :class="chatViewMode === 'chat_only' ? 'max-w-4xl mx-auto' : 'w-full'">
+          <div
+            v-if="mockPagesPersistError"
+            class="mb-2 rounded-md border border-red-500/40 bg-red-500/10 px-2.5 py-2 text-[10px] leading-relaxed text-red-400"
+            data-test-id="mock-page-persist-error"
+          >
+            {{ ai.mockPagePersistError }}
+          </div>
+          <div
+            v-if="!page || page.messages.length === 0"
+            class="flex h-full min-h-60 flex-col items-center justify-center gap-2 text-center"
+          >
+            <icon-lucide-sparkles class="size-6 text-accent/60" />
+            <p class="text-xs font-medium text-surface">{{ ai.mockPageEmptyTitle }}</p>
+            <p class="max-w-72 text-[11px] leading-relaxed text-surface/70">
+              {{ ai.mockPageEmptyHint }}
+            </p>
+          </div>
+          <template v-else>
           <div
             v-for="(message, index) in page.messages"
             :key="index"
@@ -910,11 +1004,11 @@ function handlePromptKeydown(event: KeyboardEvent) {
                 class="mt-1"
                 data-test-id="mock-page-msg-reasoning"
               >
-                <summary class="cursor-pointer text-[10px] font-semibold text-muted">
+                <summary class="cursor-pointer text-[10px] font-semibold text-surface/80 hover:text-surface transition-colors">
                   {{ ai.mockPageReasoning }}
                 </summary>
                 <pre
-                  class="mt-1 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
+                  class="mt-1 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-surface/90"
                   >{{ message.reasoning }}</pre
                 >
               </details>
@@ -923,14 +1017,32 @@ function handlePromptKeydown(event: KeyboardEvent) {
                 class="mt-1"
                 data-test-id="mock-page-msg-process"
               >
-                <summary class="cursor-pointer text-[10px] font-semibold text-muted">
+                <summary class="cursor-pointer text-[10px] font-semibold text-surface/80 hover:text-surface transition-colors">
                   {{ ai.mockPageProcess }}
                 </summary>
                 <pre
-                  class="mt-1 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
+                  class="mt-1 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-surface/90"
                   >{{ message.process }}</pre
                 >
               </details>
+            </div>
+          </div>
+          <div
+            v-for="(queuedItem, qIdx) in messageQueue"
+            :key="'queue-' + qIdx"
+            class="mb-2 flex justify-end"
+          >
+            <div class="flex items-center gap-2 max-w-[85%] rounded-lg border border-dashed border-accent/50 bg-accent/15 px-3 py-1.5 text-xs text-accent">
+              <icon-lucide-clock class="size-3.5 animate-pulse shrink-0" />
+              <span class="truncate">排队等待执行：{{ queuedItem }}</span>
+              <button
+                type="button"
+                class="ml-1 text-[11px] text-surface/60 hover:text-red-400 transition-colors shrink-0"
+                title="取消此排队消息"
+                @click="removeQueuedMessage(qIdx)"
+              >
+                ✕
+              </button>
             </div>
           </div>
           <div v-if="generating" class="mb-2 flex justify-start">
@@ -1014,17 +1126,17 @@ function handlePromptKeydown(event: KeyboardEvent) {
                 class="mt-2.5 space-y-2.5 rounded-lg border border-border/50 bg-panel/90 p-3 text-xs"
                 data-test-id="mock-page-clarification"
               >
-                <div class="flex items-center justify-between text-[11px]">
-                  <div class="flex items-center gap-1.5 font-medium text-accent">
-                    <icon-lucide-sparkles class="size-3.5" />
-                    <span>{{ ai.mockPageClarifyTitle }}</span>
+                <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-[11px] pb-1 border-b border-border/20">
+                  <div class="flex items-center gap-1.5 font-medium text-accent min-w-0 pr-2">
+                    <icon-lucide-sparkles class="size-3.5 shrink-0" />
+                    <span class="truncate">{{ ai.mockPageClarifyTitle }}</span>
                   </div>
                   <button
                     type="button"
-                    class="text-[10px] text-muted hover:text-surface transition-colors underline-offset-2 hover:underline"
+                    class="text-[10px] text-surface/70 hover:text-accent transition-colors underline-offset-2 hover:underline self-end sm:self-auto shrink-0 whitespace-nowrap"
                     @click="submitClarificationFreeText('')"
                   >
-                    跳过选择（由 AI 自主决定）
+                    跳过选择（AI自主决定）
                   </button>
                 </div>
                 <div
@@ -1061,11 +1173,12 @@ function handlePromptKeydown(event: KeyboardEvent) {
                     </button>
                   </div>
                 </div>
-                <div class="flex items-center justify-between pt-1 border-t border-border/30">
-                  <span class="text-[10px] text-muted/70">可点上方选项，或直接在底部输入框自由回复</span>
+                <div class="flex items-center justify-between gap-2 pt-1.5 border-t border-border/30">
+                  <span class="text-[10px] text-surface/75">可点上方选项，或直接在底部自由回复</span>
                   <AppButton
                     size="xs"
                     data-test-id="mock-page-clarify-submit"
+                    class="shrink-0"
                     @click="answerClarification"
                   >
                     {{ ai.mockPageClarifySubmit }}
@@ -1074,83 +1187,106 @@ function handlePromptKeydown(event: KeyboardEvent) {
               </div>
               <pre
                 v-if="streamedText || activeStepLabel"
-                class="mt-1 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-muted/90"
+                class="mt-1 font-mono text-[10px] leading-relaxed whitespace-pre-wrap text-surface/90"
                 data-test-id="mock-page-build-status"
                 >{{ streamedText || activeStepLabel }}<span class="mock-caret"></span
               ></pre>
             </div>
           </div>
         </template>
-      </div>
-      <div class="shrink-0 border-t border-border p-2.5">
-        <div
-          v-if="generating || errorMsg || voiceState !== 'idle' || voiceError"
-          class="px-1 pb-1.5 text-[11px] leading-tight"
-          :class="errorMsg || voiceError ? 'text-red-400' : 'text-muted'"
-          data-test-id="mock-page-status"
-        >
-          <template v-if="voiceError">{{ voiceError }}</template>
-          <template v-else-if="errorMsg">{{ errorMsg }}</template>
-          <template v-else-if="voiceState === 'recording'">{{ ai.voiceListening }}</template>
-          <template v-else-if="voiceState === 'transcribing'">{{ ai.voiceTranscribing }}</template>
-          <template v-else-if="voiceState === 'polishing'">{{ ai.voicePolishing }}</template>
-          <template v-else
-            >{{ clarification ? ai.mockPageWaitingAnswer : ai.htmlPageGenerating }} ·
-            {{ elapsedLabel }} · {{ generatedChars }}</template
-          >
         </div>
-        <div class="flex items-end gap-2">
-          <textarea
-            v-model="prompt"
-            rows="2"
-            :placeholder="
-              clarification
-                ? '直接输入回答（例如：“我们来一句一句聊”），回车即可发送...'
-                : hasPage
-                  ? ai.htmlPageModifyPlaceholder
-                  : ai.htmlPagePlaceholder
-            "
-            :disabled="generating && !clarification"
-            class="block min-h-12 w-full resize-none rounded border border-border bg-transparent px-3 py-2 text-xs leading-relaxed text-surface outline-none placeholder:text-muted disabled:opacity-60"
-            data-test-id="mock-page-prompt"
-            @keydown="handlePromptKeydown"
-          ></textarea>
-          <IconButton
-            :label="voiceState === 'recording' ? ai.stopVoiceInput : ai.voiceInput"
-            size="sm"
-            data-test-id="mock-page-voice-button"
-            :disabled="generating || voiceState === 'transcribing' || voiceState === 'polishing'"
-            :class="
-              voiceState === 'recording'
-                ? 'border border-red-500 text-red-500 hover:text-red-500'
-                : ''
-            "
-            @click="handleVoiceButton"
+      </div>
+      <div class="shrink-0 border-t border-border p-2.5 bg-panel/80">
+        <div :class="chatViewMode === 'chat_only' ? 'max-w-4xl mx-auto' : 'w-full'">
+          <div
+            v-if="generating || errorMsg || voiceState !== 'idle' || voiceError"
+            class="px-1 pb-1.5 text-[11px] leading-tight"
+            :class="errorMsg || voiceError ? 'text-red-400' : 'text-surface/70'"
+            data-test-id="mock-page-status"
           >
-            <icon-lucide-loader-circle
-              v-if="voiceState === 'transcribing' || voiceState === 'polishing'"
-              class="size-3.5 animate-spin"
-            />
-            <icon-lucide-square v-else-if="voiceState === 'recording'" class="size-3" />
-            <icon-lucide-mic v-else class="size-3.5" />
-          </IconButton>
-          <AppButton
-            size="sm"
-            data-test-id="mock-page-generate"
-            :disabled="(generating && !clarification) || !prompt.trim()"
-            @click="clarification ? submitClarificationFreeText(prompt) : generate()"
-          >
-            {{ clarification ? '发送' : ai.htmlPageGenerate }}
-          </AppButton>
+            <template v-if="voiceError">{{ voiceError }}</template>
+            <template v-else-if="errorMsg">{{ errorMsg }}</template>
+            <template v-else-if="voiceState === 'recording'">{{ ai.voiceListening }}</template>
+            <template v-else-if="voiceState === 'transcribing'">{{ ai.voiceTranscribing }}</template>
+            <template v-else-if="voiceState === 'polishing'">{{ ai.voicePolishing }}</template>
+            <template v-else
+              >{{ clarification ? ai.mockPageWaitingAnswer : (activity.length === 0 ? '思考中...' : ai.htmlPageGenerating) }} ·
+              {{ elapsedLabel }} · {{ generatedChars }}</template
+            >
+          </div>
+          <div class="flex items-end gap-2">
+            <textarea
+              v-model="prompt"
+              rows="2"
+              :placeholder="
+                clarification
+                  ? '直接输入回答（例如：“我们来一句一句聊”），回车即可发送...'
+                  : generating
+                    ? 'AI 正在执行中... 输入内容并回车即可排队追加指令'
+                    : hasPage
+                      ? ai.htmlPageModifyPlaceholder
+                      : ai.htmlPagePlaceholder
+              "
+              class="block min-h-12 w-full resize-none rounded border border-border bg-transparent px-3 py-2 text-xs leading-relaxed text-surface outline-none placeholder:text-surface/40 focus:border-accent/60"
+              data-test-id="mock-page-prompt"
+              @keydown="handlePromptKeydown"
+            ></textarea>
+            <IconButton
+              :label="voiceState === 'recording' ? ai.stopVoiceInput : ai.voiceInput"
+              size="sm"
+              data-test-id="mock-page-voice-button"
+              :disabled="voiceState === 'transcribing' || voiceState === 'polishing'"
+              :class="
+                voiceState === 'recording'
+                  ? 'border border-red-500 text-red-500 hover:text-red-500'
+                  : ''
+              "
+              @click="handleVoiceButton"
+            >
+              <icon-lucide-loader-circle
+                v-if="voiceState === 'transcribing' || voiceState === 'polishing'"
+                class="size-3.5 animate-spin"
+              />
+              <icon-lucide-square v-else-if="voiceState === 'recording'" class="size-3" />
+              <icon-lucide-mic v-else class="size-3.5" />
+            </IconButton>
+            <AppButton
+              size="sm"
+              data-test-id="mock-page-generate"
+              :disabled="!prompt.trim()"
+              @click="handleSendAction"
+            >
+              {{ clarification ? '发送' : (generating ? '排队发送' : ai.htmlPageGenerate) }}
+            </AppButton>
+          </div>
         </div>
       </div>
     </div>
 
+    <!-- 可拖拽分隔条 -->
     <div
+      v-if="chatViewMode === 'split'"
+      class="w-1.5 shrink-0 cursor-col-resize hover:bg-accent/40 active:bg-accent transition-colors z-20 -ml-0.5 flex items-center justify-center group select-none"
+      title="拖拽调节宽度"
+      @mousedown="startSplitterDrag"
+    >
+      <div class="w-0.5 h-6 rounded-full bg-border group-hover:bg-accent/80 transition-colors"></div>
+    </div>
+
+    <div
+      v-show="chatViewMode !== 'chat_only'"
       class="flex min-w-0 flex-col bg-[#141518]"
       :class="fullscreen ? 'fixed inset-0 z-50' : 'flex-1'"
     >
       <div class="flex h-10 shrink-0 items-center gap-2 border-b border-white/10 px-3">
+        <button
+          v-if="chatViewMode === 'preview_only'"
+          type="button"
+          class="rounded px-2 py-0.5 text-[11px] bg-accent/20 text-accent hover:bg-accent/30 font-medium transition-colors mr-1"
+          @click="chatViewMode = 'split'"
+        >
+          ← 展开会话
+        </button>
         <div class="flex rounded bg-black/30 p-0.5">
           <button
             type="button"
