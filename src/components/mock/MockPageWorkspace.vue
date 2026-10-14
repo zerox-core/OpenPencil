@@ -234,14 +234,6 @@ function selectClarifyOption(qi: number, opt: string): void {
   if (pending.answers[qi]) pending.custom[qi] = ''
 }
 
-function onClarifyCustomInput(qi: number, event: Event): void {
-  const pending = clarification.value
-  if (!pending) return
-  const value = (event.target as HTMLInputElement).value
-  pending.custom[qi] = value
-  if (value.trim().length > 0) pending.answers[qi] = ''
-}
-
 function answerClarification(): void {
   const pending = clarification.value
   if (!pending) return
@@ -259,6 +251,22 @@ function answerClarification(): void {
   streamedText.value = ''
   resumeTimer()
   pending.resolve(lines.join('\n'))
+}
+
+function submitClarificationFreeText(userText: string): void {
+  const pending = clarification.value
+  if (!pending) return
+  const trimmed = userText.trim()
+  const reply = trimmed || '（用户跳过了选择，请根据最佳判断自主设计，或若用户希望交流则以对话探讨）'
+  const state = page.value
+  if (state) {
+    state.messages.push({ role: 'user', text: reply })
+  }
+  clarification.value = null
+  prompt.value = ''
+  streamedText.value = ''
+  resumeTimer()
+  pending.resolve(reply)
 }
 
 let activitySeq = 0
@@ -428,15 +436,73 @@ function recordAssistantSuccessMessage(
   }
 }
 
+interface ParsedAgentError {
+  title: string
+  detail: string
+  rawMessage: string
+}
+
+const AGENT_ERROR_PATTERNS: Array<{
+  pattern: RegExp
+  title: string
+  detail: string
+}> = [
+  {
+    pattern: /429|rate\s*limit|quota|exceeded/i,
+    title: 'API 请求频率或配额超限 (429 Rate Limit)',
+    detail: '模型服务商并发请求超限或额度不足。建议稍候片刻重试，或在设置中检查模型密钥与额度。'
+  },
+  {
+    pattern: /401|unauthorized|invalid\s*api\s*key|invalid_key/i,
+    title: 'API 认证失败 (401 Unauthorized)',
+    detail: '模型 API Key 无效或已过期。请前往“设置 → AI 模型”重新配置有效密钥。'
+  },
+  {
+    pattern: /503|502|504|service\s*unavailable|bad\s*gateway/i,
+    title: '上游模型服务不可用 (503/502)',
+    detail: '模型服务商上游服务暂时过载或宕机，建议稍后重试或切换备用模型服务。'
+  },
+  {
+    pattern: /timeout|abort|network|fetch\s*failed/i,
+    title: '网络连接超时或中断 (Network Timeout)',
+    detail: '与 AI 模型的网络连接不稳定或响应超时，请检查网络/代理设置。'
+  },
+  {
+    pattern: /context|token\s*limit|maximum\s*context/i,
+    title: '上下文长度超限 (Context Limit)',
+    detail: '当前工程文件规模超过了模型单轮上下文窗口。建议拆分为小模块或启动新会话。'
+  }
+]
+
+function parseAgentError(error: unknown): ParsedAgentError {
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  for (const item of AGENT_ERROR_PATTERNS) {
+    if (item.pattern.test(msg)) {
+      return { title: item.title, detail: item.detail, rawMessage: msg }
+    }
+  }
+  return {
+    title: '页面生成中断或执行异常',
+    detail: msg ? `原因：${msg.slice(0, 160)}` : '生成过程出现非预期异常，请检查模型状态。',
+    rawMessage: msg
+  }
+}
+
 function recordAssistantErrorMessage(
   state: MockPageState,
   streamed: string,
   reasoning: string,
-  failLabel: string
+  parsed: ParsedAgentError
 ): void {
+  const text = [
+    `**${parsed.title}**`,
+    '',
+    parsed.detail,
+    parsed.rawMessage ? `\n\`\`\`text\n${parsed.rawMessage}\n\`\`\`` : ''
+  ].join('\n')
   state.messages.push({
     role: 'assistant',
-    text: failLabel,
+    text,
     process: streamed || undefined,
     reasoning: reasoning || undefined
   })
@@ -491,7 +557,6 @@ async function generate() {
   contentStarted = false
   lastPhase = 'analyze'
   planSteps.value = []
-  pushActivity(ai.value.mockPageStepUnderstand)
   elapsedMs.value = 0
   generateStartedAt = performance.now()
   startTimer()
@@ -621,6 +686,9 @@ async function generate() {
       return
     }
     finishActivity(true)
+    pushActivity(ai.value.mockPageStepReview)
+    const reviewNote = await reviewGeneratedPage(state, text, result, runAgentRound)
+    finishActivity(true)
     pushActivity(ai.value.mockPageStepFinish)
     finishActivity(true)
     recordAssistantSuccessMessage(
@@ -635,12 +703,13 @@ async function generate() {
   } catch (error) {
     console.warn('mock page generation failed', error)
     finishActivity(false)
-    errorMsg.value = ai.value.htmlPageFailed
+    const parsed = parseAgentError(error)
+    errorMsg.value = parsed.title
     recordAssistantErrorMessage(
       state,
       streamedText.value,
       reasoningText.value,
-      ai.value.htmlPageFailed
+      parsed
     )
   } finally {
     stopTimer()
@@ -787,6 +856,10 @@ onBeforeUnmount(() => {
 function handlePromptKeydown(event: KeyboardEvent) {
   if (event.code !== 'Enter' || event.shiftKey || event.isComposing) return
   event.preventDefault()
+  if (clarification.value) {
+    submitClarificationFreeText(prompt.value)
+    return
+  }
   void generate()
 }
 </script>
@@ -867,7 +940,11 @@ function handlePromptKeydown(event: KeyboardEvent) {
             >
               <div class="mb-1 flex items-center gap-2 text-muted">
                 <span class="mock-breathe inline-block size-1.5 rounded-full bg-accent"></span>
-                <span>{{ clarification ? ai.mockPageWaitingAnswer : ai.htmlPageGenerating }}</span>
+                <span>{{
+                  clarification
+                    ? ai.mockPageWaitingAnswer
+                    : (activity.length === 0 ? '思考中...' : ai.htmlPageGenerating)
+                }}</span>
                 <span class="tabular-nums" data-test-id="mock-page-elapsed">{{
                   elapsedLabel
                 }}</span>
@@ -934,35 +1011,44 @@ function handlePromptKeydown(event: KeyboardEvent) {
               </div>
               <div
                 v-if="clarification"
-                class="mt-2 rounded-xl border border-accent/30 bg-gradient-to-b from-accent/15 via-accent/5 to-transparent p-3 shadow-[0_10px_30px_rgb(0_0_0/0.45)]"
+                class="mt-2.5 space-y-2.5 rounded-lg border border-border/50 bg-panel/90 p-3 text-xs"
                 data-test-id="mock-page-clarification"
               >
-                <div class="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-accent">
-                  <icon-lucide-sparkles class="size-3.5" />
-                  <span>{{ ai.mockPageClarifyTitle }}</span>
+                <div class="flex items-center justify-between text-[11px]">
+                  <div class="flex items-center gap-1.5 font-medium text-accent">
+                    <icon-lucide-sparkles class="size-3.5" />
+                    <span>{{ ai.mockPageClarifyTitle }}</span>
+                  </div>
+                  <button
+                    type="button"
+                    class="text-[10px] text-muted hover:text-surface transition-colors underline-offset-2 hover:underline"
+                    @click="submitClarificationFreeText('')"
+                  >
+                    跳过选择（由 AI 自主决定）
+                  </button>
                 </div>
                 <div
                   v-for="(q, qi) in clarification.questions"
                   :key="qi"
-                  class="mb-2.5"
+                  class="space-y-1.5"
                   :data-test-id="'mock-page-clarify-q-' + qi"
                 >
-                  <div class="mb-1 text-[11px] font-medium text-surface">
+                  <div class="text-[11px] font-medium text-surface">
                     {{ qi + 1 }}. {{ q.question }}
                   </div>
                   <div
                     v-if="q.options && q.options.length > 0"
-                    class="mb-1 flex flex-wrap gap-1.5"
+                    class="flex flex-wrap gap-1.5"
                   >
                     <button
                       v-for="opt in q.options"
                       :key="opt"
                       type="button"
-                      class="flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] transition-colors"
+                      class="flex items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] transition-all"
                       :class="
                         clarification.answers[qi] === opt
-                          ? 'border-accent bg-accent text-white shadow-[0_2px_10px_rgb(0_0_0/0.4)]'
-                          : 'border-white/15 bg-white/5 text-muted hover:border-accent/60 hover:text-surface'
+                          ? 'border-accent bg-accent/20 text-accent font-medium shadow-sm'
+                          : 'border-border/60 bg-surface/5 text-muted hover:border-accent/40 hover:text-surface'
                       "
                       :data-test-id="'mock-page-clarify-opt-' + qi"
                       @click="selectClarifyOption(qi, opt)"
@@ -974,22 +1060,17 @@ function handlePromptKeydown(event: KeyboardEvent) {
                       {{ opt }}
                     </button>
                   </div>
-                  <input
-                    :value="clarification.custom[qi]"
-                    type="text"
-                    :placeholder="ai.mockPageClarifyInputHint"
-                    class="block w-full rounded-lg border border-white/15 bg-black/20 px-2.5 py-1.5 text-[11px] text-surface outline-none placeholder:text-muted focus:border-accent/60"
-                    :data-test-id="'mock-page-clarify-input-' + qi"
-                    @input="onClarifyCustomInput(qi, $event)"
-                  />
                 </div>
-                <AppButton
-                  size="xs"
-                  data-test-id="mock-page-clarify-submit"
-                  @click="answerClarification"
-                >
-                  {{ ai.mockPageClarifySubmit }}
-                </AppButton>
+                <div class="flex items-center justify-between pt-1 border-t border-border/30">
+                  <span class="text-[10px] text-muted/70">可点上方选项，或直接在底部输入框自由回复</span>
+                  <AppButton
+                    size="xs"
+                    data-test-id="mock-page-clarify-submit"
+                    @click="answerClarification"
+                  >
+                    {{ ai.mockPageClarifySubmit }}
+                  </AppButton>
+                </div>
               </div>
               <pre
                 v-if="streamedText || activeStepLabel"
@@ -1022,8 +1103,14 @@ function handlePromptKeydown(event: KeyboardEvent) {
           <textarea
             v-model="prompt"
             rows="2"
-            :placeholder="hasPage ? ai.htmlPageModifyPlaceholder : ai.htmlPagePlaceholder"
-            :disabled="generating"
+            :placeholder="
+              clarification
+                ? '直接输入回答（例如：“我们来一句一句聊”），回车即可发送...'
+                : hasPage
+                  ? ai.htmlPageModifyPlaceholder
+                  : ai.htmlPagePlaceholder
+            "
+            :disabled="generating && !clarification"
             class="block min-h-12 w-full resize-none rounded border border-border bg-transparent px-3 py-2 text-xs leading-relaxed text-surface outline-none placeholder:text-muted disabled:opacity-60"
             data-test-id="mock-page-prompt"
             @keydown="handlePromptKeydown"
@@ -1050,10 +1137,10 @@ function handlePromptKeydown(event: KeyboardEvent) {
           <AppButton
             size="sm"
             data-test-id="mock-page-generate"
-            :disabled="generating || !prompt.trim()"
-            @click="generate"
+            :disabled="(generating && !clarification) || !prompt.trim()"
+            @click="clarification ? submitClarificationFreeText(prompt) : generate()"
           >
-            {{ ai.htmlPageGenerate }}
+            {{ clarification ? '发送' : ai.htmlPageGenerate }}
           </AppButton>
         </div>
       </div>
