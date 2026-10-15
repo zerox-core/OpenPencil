@@ -20,6 +20,14 @@ describe('Mock Router: Verdict Parser', () => {
     expect(verdict.confidence).toBe(0.9)
   })
 
+  it('parses creative verdict correctly', () => {
+    const raw = '{"track":"creative","targetFile":null,"confidence":0.98,"reason":"用户要求进行鹈鹕测试与SVG绘制"}'
+    const verdict = parseRouterVerdict(raw)
+    expect(verdict.track).toBe('creative')
+    expect(verdict.targetFile).toBeNull()
+    expect(verdict.confidence).toBe(0.98)
+  })
+
   it('falls back to workflow on malformed JSON or unknown track', () => {
     const malformed = '我无法以 JSON 回答'
     const verdict = parseRouterVerdict(malformed)

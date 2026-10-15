@@ -5,11 +5,13 @@ import type { AIProviderID } from '@open-pencil/core/constants'
 import { applyPatchToString } from '@/app/mock/tools/code'
 import {
   FAST_CONSULT_SYSTEM_PROMPT,
+  FAST_CREATIVE_SYSTEM_PROMPT,
   FAST_PATCH_SYSTEM_PROMPT,
   ROUTER_SYSTEM_PROMPT
 } from './prompts'
+import { extractHTML } from '@/app/mock/project'
 
-export type MockRouterTrack = 'consult' | 'patch' | 'workflow'
+export type MockRouterTrack = 'consult' | 'patch' | 'creative' | 'workflow'
 
 export interface MockRouterVerdict {
   track: MockRouterTrack
@@ -28,10 +30,10 @@ export function parseRouterVerdict(text: string): MockRouterVerdict {
         confidence?: unknown
         reason?: unknown
       }
-      const track =
-        parsed.track === 'consult' || parsed.track === 'patch' || parsed.track === 'workflow'
-          ? (parsed.track as MockRouterTrack)
-          : 'workflow'
+      const validTracks = ['consult', 'patch', 'creative', 'workflow']
+      const track = typeof parsed.track === 'string' && validTracks.includes(parsed.track)
+        ? (parsed.track as MockRouterTrack)
+        : 'workflow'
       return {
         track,
         targetFile: typeof parsed.targetFile === 'string' ? parsed.targetFile : null,
@@ -56,12 +58,16 @@ export async function routeMockIntent(options: {
   hasProject: boolean
   fileList?: string[]
 }): Promise<MockRouterVerdict> {
-  // 如果当前根本没有项目代码，用户输入又不是打招呼咨询，直接进深度生成
-  if (!options.hasProject) {
-    const isGreetingOrQuestion = /^(你好|hi|hello|什么是|介绍一下|你能做|你是谁)/i.test(options.userPrompt.trim())
-    if (!isGreetingOrQuestion) {
-      return { track: 'workflow', confidence: 1.0, reason: '全新生成需求，直达深度链路' }
-    }
+  const promptText = options.userPrompt.trim()
+
+  // 1. 快速正则嗅探（零延迟分流）：
+  if (/^(你好|hi|hello|在吗|你是谁|介绍一下|你能做什么|怎么用)/i.test(promptText)) {
+    return { track: 'consult', confidence: 1.0, reason: '用户日常问候与咨询' }
+  }
+
+  // 经典基准测试（如著名的“鹈鹕骑自行车测试”）、SVG/Canvas 纯图形动效
+  if (/(鹈鹕|pelican|自行车|bicycle|svg|canvas|粒子|物理模拟|时钟|动效|小游戏|着色器|shader)/i.test(promptText)) {
+    return { track: 'creative', confidence: 0.95, reason: '识别为创意视觉/基准测试/图形动效快轨' }
   }
 
   const prompt = [
@@ -175,6 +181,20 @@ export function executeFastConsultStream(options: {
   })
 }
 
+export function executeCreativeTrackStream(options: {
+  model: LanguageModel
+  providerID: AIProviderID
+  reasoningEffort: string
+  userPrompt: string
+}) {
+  return streamText({
+    model: options.model,
+    system: FAST_CREATIVE_SYSTEM_PROMPT,
+    prompt: `用户需求：${options.userPrompt}\n请以高水准的代码艺术与生动动效直接输出完整的单文件 HTML 代码（含内联样式与脚本，用代码块包裹）。`,
+    providerOptions: buildReasoningProviderOptions(options.providerID, options.reasoningEffort)
+  })
+}
+
 export interface FastTrackDispatchOptions {
   model: LanguageModel
   providerID: AIProviderID
@@ -189,13 +209,80 @@ export interface FastTrackDispatchOptions {
 
 export interface FastTrackDispatchResult {
   handled: boolean
-  track: 'consult' | 'patch' | 'workflow'
+  track: MockRouterTrack
   assistantMessage?: string
   patchedFiles?: Record<string, string>
 }
 
+async function dispatchConsultTrack(options: FastTrackDispatchOptions): Promise<FastTrackDispatchResult> {
+  let fullText = ''
+  const consultStream = executeFastConsultStream({
+    model: options.model,
+    providerID: options.providerID,
+    reasoningEffort: options.reasoningEffort,
+    userPrompt: options.userPrompt,
+    vfsSummary: options.fileList.length > 0 ? options.fileList.join(', ') : undefined
+  })
+  for await (const chunk of consultStream.textStream) {
+    fullText += chunk
+    options.onTextDelta(chunk)
+  }
+  return { handled: true, track: 'consult', assistantMessage: fullText }
+}
+
+async function dispatchPatchTrack(
+  options: FastTrackDispatchOptions,
+  verdict: MockRouterVerdict
+): Promise<FastTrackDispatchResult | null> {
+  if (!options.hasProject) return null
+  const target = verdict.targetFile && Object.hasOwn(options.files, verdict.targetFile)
+    ? verdict.targetFile
+    : options.entryFile
+  const currentCode = options.files[target]
+  if (!currentCode) return null
+
+  const patchRes = await executeFastPatch({
+    model: options.model,
+    providerID: options.providerID,
+    reasoningEffort: options.reasoningEffort,
+    userPrompt: options.userPrompt,
+    targetFile: target,
+    fileContent: currentCode
+  })
+
+  if (!patchRes.ok) return null
+  return {
+    handled: true,
+    track: 'patch',
+    assistantMessage: patchRes.summary,
+    patchedFiles: { ...options.files, [target]: patchRes.patchedContent }
+  }
+}
+
+async function dispatchCreativeTrack(options: FastTrackDispatchOptions): Promise<FastTrackDispatchResult | null> {
+  let fullText = ''
+  const creativeStream = executeCreativeTrackStream({
+    model: options.model,
+    providerID: options.providerID,
+    reasoningEffort: options.reasoningEffort,
+    userPrompt: options.userPrompt
+  })
+  for await (const chunk of creativeStream.textStream) {
+    fullText += chunk
+    options.onTextDelta(chunk)
+  }
+  const html = extractHTML(fullText)
+  if (!html.trim()) return null
+  return {
+    handled: true,
+    track: 'creative',
+    assistantMessage: '为您直接生成了专属创意视觉与交互成果！中央呈现主舞台与交互控制器。',
+    patchedFiles: { 'index.html': html }
+  }
+}
+
 /**
- * 尝试执行快轨拦截与调度。如果成功命中出口 A 或 B 则直接交付，否则交回主循环。
+ * 尝试执行快轨拦截与调度。如果成功命中出口 A、B 或 C 则直接交付，否则交回主循环。
  */
 export async function tryFastTrackDispatch(
   options: FastTrackDispatchOptions
@@ -211,55 +298,19 @@ export async function tryFastTrackDispatch(
 
   // 出口 A：问候闲聊与设计咨询快轨
   if (verdict.track === 'consult') {
-    let fullText = ''
-    const consultStream = executeFastConsultStream({
-      model: options.model,
-      providerID: options.providerID,
-      reasoningEffort: options.reasoningEffort,
-      userPrompt: options.userPrompt,
-      vfsSummary: options.fileList.length > 0 ? options.fileList.join(', ') : undefined
-    })
-
-    for await (const chunk of consultStream.textStream) {
-      fullText += chunk
-      options.onTextDelta(chunk)
-    }
-
-    return {
-      handled: true,
-      track: 'consult',
-      assistantMessage: fullText
-    }
+    return dispatchConsultTrack(options)
   }
 
   // 出口 B：单点局部微调快轨
-  if (verdict.track === 'patch' && options.hasProject) {
-    const target = verdict.targetFile && Object.hasOwn(options.files, verdict.targetFile)
-      ? verdict.targetFile
-      : options.entryFile
-    const currentCode = options.files[target]
-    if (currentCode) {
-      const patchRes = await executeFastPatch({
-        model: options.model,
-        providerID: options.providerID,
-        reasoningEffort: options.reasoningEffort,
-        userPrompt: options.userPrompt,
-        targetFile: target,
-        fileContent: currentCode
-      })
+  if (verdict.track === 'patch') {
+    const patchResult = await dispatchPatchTrack(options, verdict)
+    if (patchResult) return patchResult
+  }
 
-      if (patchRes.ok) {
-        return {
-          handled: true,
-          track: 'patch',
-          assistantMessage: patchRes.summary,
-          patchedFiles: {
-            ...options.files,
-            [target]: patchRes.patchedContent
-          }
-        }
-      }
-    }
+  // 出口 C：创意视觉、图形动效与基准测试快轨
+  if (verdict.track === 'creative') {
+    const creativeResult = await dispatchCreativeTrack(options)
+    if (creativeResult) return creativeResult
   }
 
   return {
