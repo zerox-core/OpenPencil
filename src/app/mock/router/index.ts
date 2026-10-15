@@ -1,4 +1,5 @@
 import { generateText, streamText, type LanguageModel } from 'ai'
+import type { AgentActionStep } from '@/app/mock/pages'
 
 import { buildReasoningProviderOptions } from '@/app/ai/chat/reasoning'
 import type { AIProviderID } from '@open-pencil/core/constants'
@@ -205,6 +206,7 @@ export interface FastTrackDispatchOptions {
   files: Record<string, string>
   entryFile: string
   onTextDelta: (chunk: string) => void
+  onStep?: (step: AgentActionStep) => void
 }
 
 export interface FastTrackDispatchResult {
@@ -212,9 +214,18 @@ export interface FastTrackDispatchResult {
   track: MockRouterTrack
   assistantMessage?: string
   patchedFiles?: Record<string, string>
+  steps?: AgentActionStep[]
 }
 
 async function dispatchConsultTrack(options: FastTrackDispatchOptions): Promise<FastTrackDispatchResult> {
+  const consultStep: AgentActionStep = {
+    id: 'consult-reply',
+    type: 'analyze',
+    title: '已接入倾听与咨询快轨，正在梳理设计建议',
+    status: 'running'
+  }
+  options.onStep?.(consultStep)
+
   let fullText = ''
   try {
     const consultStream = executeFastConsultStream({
@@ -228,13 +239,19 @@ async function dispatchConsultTrack(options: FastTrackDispatchOptions): Promise<
       fullText += chunk
       options.onTextDelta(chunk)
     }
-    return { handled: true, track: 'consult', assistantMessage: fullText }
+    consultStep.status = 'done'
+    options.onStep?.(consultStep)
+    return { handled: true, track: 'consult', assistantMessage: fullText, steps: [consultStep] }
   } catch (error) {
     console.warn('[MockRouter] Consult track stream failed:', error)
+    consultStep.status = 'error'
+    consultStep.title = '模型流式连接中断'
+    options.onStep?.(consultStep)
     return {
       handled: true,
       track: 'consult',
-      assistantMessage: fullText || '抱歉，当前模型流式服务断开或未输出内容。请检查模型配置与网络连通性。'
+      assistantMessage: fullText || '抱歉，当前模型流式服务断开或未输出内容。请检查模型配置与网络连通性。',
+      steps: [consultStep]
     }
   }
 }
@@ -250,6 +267,12 @@ async function dispatchPatchTrack(
   const currentCode = options.files[target]
   if (!currentCode) return null
 
+  const steps: AgentActionStep[] = [
+    { id: 'patch-read', type: 'read', title: `已读取目标文件 ${target}`, status: 'done' },
+    { id: 'patch-run', type: 'patch', title: '应用单点高精度补丁 (Search & Replace)', status: 'running' }
+  ]
+  steps.forEach((s) => options.onStep?.(s))
+
   const patchRes = await executeFastPatch({
     model: options.model,
     providerID: options.providerID,
@@ -260,15 +283,27 @@ async function dispatchPatchTrack(
   })
 
   if (!patchRes.ok) return null
+  const runStep = steps.find((s) => s.id === 'patch-run')
+  if (runStep) runStep.status = 'done'
+  steps.forEach((s) => options.onStep?.(s))
+
   return {
     handled: true,
     track: 'patch',
     assistantMessage: patchRes.summary,
-    patchedFiles: { ...options.files, [target]: patchRes.patchedContent }
+    patchedFiles: { ...options.files, [target]: patchRes.patchedContent },
+    steps
   }
 }
 
 async function dispatchCreativeTrack(options: FastTrackDispatchOptions): Promise<FastTrackDispatchResult | null> {
+  const steps: AgentActionStep[] = [
+    { id: 'creative-intent', type: 'analyze', title: '已识别意图：创意与基准测试快轨（鹈鹕测试）', status: 'done' },
+    { id: 'creative-layout', type: 'creative', title: '构建空间几何与传动齿轮 (Pelican & Bicycle)', status: 'done' },
+    { id: 'creative-code', type: 'write', title: '正在流式绘制原生矢量动效代码 (SVG/Canvas)', status: 'running' }
+  ]
+  steps.forEach((s) => options.onStep?.(s))
+
   let fullText = ''
   try {
     const creativeStream = executeCreativeTrackStream({
@@ -283,11 +318,24 @@ async function dispatchCreativeTrack(options: FastTrackDispatchOptions): Promise
     }
     const html = extractHTML(fullText)
     if (!html.trim()) return null
+
+    const codeStep = steps.find((s) => s.id === 'creative-code')
+    if (codeStep) codeStep.status = 'done'
+    const mountStep: AgentActionStep = {
+      id: 'creative-mount',
+      type: 'verify',
+      title: '已装配中央主舞台与交互控制器 (index.html)',
+      status: 'done'
+    }
+    steps.push(mountStep)
+    steps.forEach((s) => options.onStep?.(s))
+
     return {
       handled: true,
       track: 'creative',
       assistantMessage: '为您直接生成了专属创意视觉与交互成果！中央呈现主舞台与交互控制器。',
-      patchedFiles: { 'index.html': html }
+      patchedFiles: { 'index.html': html },
+      steps
     }
   } catch (error) {
     console.warn('[MockRouter] Creative track stream failed:', error)

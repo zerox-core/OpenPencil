@@ -25,6 +25,8 @@ import {
   getMockPageId,
   mockPageState,
   mockPagesPersistError,
+  type AgentActionStep,
+  type AgentActionType,
   type MockChatMessage,
   type MockPageSizeKind,
   type MockPageState
@@ -82,6 +84,17 @@ const reasoningOpen = ref(true)
 const elapsedMs = ref(0)
 const fullscreen = ref(false)
 const activity = ref<AgentActivity[]>([])
+const currentSteps = ref<AgentActionStep[]>([])
+
+function upsertActionStep(step: AgentActionStep): void {
+  const existingIdx = currentSteps.value.findIndex((s) => s.id === step.id)
+  if (existingIdx !== -1) {
+    currentSteps.value[existingIdx] = { ...step }
+  } else {
+    currentSteps.value.push({ ...step })
+  }
+}
+
 /** 流式工具输入的 toolCallId → 活动条索引（并行工具调用时各更新各的条目）。 */
 const toolActivityIdx = new Map<string, number>()
 const planSteps = ref<MockPipelineSnapshot['plan']>([])
@@ -300,10 +313,26 @@ function submitClarificationFreeText(userText: string): void {
   pending.resolve(reply)
 }
 
+function inferActionType(label: string): AgentActionType {
+  if (/read|读取|审查|检索|查看/i.test(label)) return 'read'
+  if (/search|查找|搜索/i.test(label)) return 'search'
+  if (/write|写入|保存|生成/i.test(label)) return 'write'
+  if (/patch|修改|替换|更新/i.test(label)) return 'patch'
+  if (/creative|创意|绘|svg|canvas|动效|构件/i.test(label)) return 'creative'
+  if (/verify|校验|review|自查|检查|门禁/i.test(label)) return 'verify'
+  return 'analyze'
+}
+
 let activitySeq = 0
 
 function pushActivity(label: string): void {
   activity.value.push({ id: ++activitySeq, label, done: false })
+  upsertActionStep({
+    id: `act-${activitySeq}`,
+    type: inferActionType(label),
+    title: label,
+    status: 'running'
+  })
 }
 
 function finishActivity(ok: boolean): void {
@@ -312,6 +341,10 @@ function finishActivity(ok: boolean): void {
     if (event && !event.done) {
       event.done = true
       if (!ok) event.label = `${event.label} ✗`
+      const step = currentSteps.value.find((s) => s.id === `act-${event.id}`)
+      if (step) {
+        step.status = ok ? 'done' : 'error'
+      }
       break
     }
   }
@@ -453,14 +486,16 @@ function recordAssistantSuccessMessage(
   streamed: string,
   reasoning: string,
   doneLabel: string,
-  limitLabel: string
+  limitLabel: string,
+  steps?: AgentActionStep[]
 ): void {
   const note = reviewNote ? `${result.summary}\n${reviewNote}` : result.summary || doneLabel
   state.messages.push({
     role: 'assistant',
     text: note,
     process: streamed || undefined,
-    reasoning: reasoning || undefined
+    reasoning: reasoning || undefined,
+    steps: steps && steps.length > 0 ? [...steps] : undefined
   })
   if (result.reachedStepLimit) {
     state.messages.push({ role: 'system', text: limitLabel })
@@ -589,6 +624,7 @@ async function generate() {
   generatedChars.value = 0
   reasoningText.value = ''
   activity.value = []
+  currentSteps.value = []
   toolActivityIdx.clear()
   contentStarted = false
   lastPhase = 'analyze'
@@ -691,6 +727,9 @@ async function generate() {
         noteContentStarted()
         streamedText.value += chunk
         generatedChars.value += chunk.length
+      },
+      onStep: (step) => {
+        upsertActionStep(step)
       }
     })
 
@@ -702,7 +741,8 @@ async function generate() {
       }
       state.messages.push({
         role: 'assistant',
-        text: fastRes.assistantMessage || streamedText.value
+        text: fastRes.assistantMessage || streamedText.value,
+        steps: fastRes.steps ?? (currentSteps.value.length > 0 ? [...currentSteps.value] : undefined)
       })
       return
     }
@@ -731,7 +771,8 @@ async function generate() {
       streamedText.value,
       reasoningText.value,
       ai.value.mockPageAssistantDone,
-      ai.value.mockPageStepLimitReached
+      ai.value.mockPageStepLimitReached,
+      currentSteps.value
     )
   } catch (error) {
     console.warn('mock page generation failed', error)
@@ -1000,7 +1041,29 @@ function handlePromptKeydown(event: KeyboardEvent) {
               <span v-if="message.role === 'user'" class="whitespace-pre-wrap">{{
                 message.text
               }}</span>
-              <ChatMarkdown v-else :content="message.text" mode="static" />
+              <template v-else>
+                <!-- 类似图二的现代 Agent 动态行为轨迹卡片 -->
+                <div v-if="message.steps && message.steps.length > 0" class="mb-2 space-y-1">
+                  <div
+                    v-for="(st, sIdx) in message.steps"
+                    :key="st.id || sIdx"
+                    class="flex items-center gap-2 rounded border border-border/40 bg-surface/5 px-2.5 py-1 text-[11px] text-surface/85"
+                  >
+                    <icon-lucide-search v-if="st.type === 'search'" class="size-3.5 text-muted shrink-0" />
+                    <icon-lucide-file-text v-else-if="st.type === 'read'" class="size-3.5 text-muted shrink-0" />
+                    <icon-lucide-code-xml v-else-if="st.type === 'write'" class="size-3.5 text-muted shrink-0" />
+                    <icon-lucide-sparkles v-else-if="st.type === 'creative'" class="size-3.5 text-accent shrink-0" />
+                    <icon-lucide-shield-check v-else-if="st.type === 'verify'" class="size-3.5 text-green-400 shrink-0" />
+                    <icon-lucide-terminal v-else class="size-3.5 text-muted shrink-0" />
+
+                    <span class="truncate flex-1 tracking-tight font-mono text-[10.5px]">{{ st.title }}</span>
+
+                    <icon-lucide-check v-if="st.status === 'done'" class="size-3 text-surface/40 shrink-0" />
+                    <span v-else-if="st.status === 'error'" class="text-[10px] text-red-400 shrink-0">✗</span>
+                  </div>
+                </div>
+                <ChatMarkdown :content="message.text" mode="static" />
+              </template>
               <details
                 v-if="message.role === 'assistant' && message.reasoning"
                 class="mt-1"
@@ -1057,36 +1120,44 @@ function handlePromptKeydown(event: KeyboardEvent) {
                 <span>{{
                   clarification
                     ? ai.mockPageWaitingAnswer
-                    : (activity.length === 0 ? '思考中...' : ai.htmlPageGenerating)
+                    : (currentSteps.length === 0 ? '正在感知意图与环境...' : 'Agent 执行中...')
                 }}</span>
                 <span class="tabular-nums" data-test-id="mock-page-elapsed">{{
                   elapsedLabel
                 }}</span>
               </div>
-              <div v-if="planSteps.length > 0" class="mb-1" data-test-id="mock-page-plan">
-                <div class="mb-1 text-[10px] font-semibold text-muted">
-                  {{ ai.mockPagePlanTitle }}
-                </div>
+
+              <!-- 类似图二的实时 Agent 行为流卡片列表 -->
+              <div v-if="currentSteps.length > 0" class="my-2 space-y-1" data-test-id="mock-page-current-steps">
                 <div
-                  v-for="(step, index) in planSteps"
-                  :key="index"
-                  class="flex items-center gap-2 py-0.5 text-[11px]"
-                  :class="step.status === 'done' ? 'text-muted' : 'text-surface'"
-                  data-test-id="mock-page-plan-step"
-                  :data-status="step.status"
+                  v-for="(st, sIdx) in currentSteps"
+                  :key="st.id || sIdx"
+                  class="flex items-center gap-2 rounded border border-border/40 bg-surface/5 px-2.5 py-1 text-[11px]"
+                  :class="st.status === 'done' ? 'text-surface/70' : 'text-surface font-medium'"
                 >
-                  <icon-lucide-check
-                    v-if="step.status === 'done'"
-                    class="size-3 shrink-0 text-accent"
-                  />
+                  <icon-lucide-search v-if="st.type === 'search'" class="size-3.5 text-muted shrink-0" />
+                  <icon-lucide-file-text v-else-if="st.type === 'read'" class="size-3.5 text-muted shrink-0" />
+                  <icon-lucide-code-xml v-else-if="st.type === 'write'" class="size-3.5 text-muted shrink-0" />
+                  <icon-lucide-sparkles v-else-if="st.type === 'creative'" class="size-3.5 text-accent shrink-0" />
+                  <icon-lucide-shield-check v-else-if="st.type === 'verify'" class="size-3.5 text-green-400 shrink-0" />
+                  <icon-lucide-terminal v-else class="size-3.5 text-muted shrink-0" />
+
+                  <span class="truncate flex-1 tracking-tight font-mono text-[10.5px]">{{ st.title }}</span>
+
                   <span
-                    v-else
-                    class="mock-breathe inline-block size-1.5 shrink-0 rounded-full bg-accent"
+                    v-if="st.status === 'running'"
+                    class="mock-breathe inline-block size-1.5 rounded-full bg-accent shrink-0"
                   ></span>
-                  <span class="truncate">{{ step.title }}</span>
+                  <icon-lucide-check
+                    v-else-if="st.status === 'done'"
+                    class="size-3 text-surface/40 shrink-0"
+                  />
+                  <span v-else class="text-[10px] text-red-400 shrink-0">✗</span>
                 </div>
               </div>
-              <div data-test-id="mock-page-build-steps">
+
+              <!-- 传统步骤兼容备选 -->
+              <div v-else-if="activity.length > 0" data-test-id="mock-page-build-steps">
                 <div
                   v-for="event in activity"
                   :key="event.id"

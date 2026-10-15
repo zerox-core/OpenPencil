@@ -9,6 +9,16 @@ import {
   writeMockPageStorage
 } from './storage'
 
+export type AgentActionType = 'analyze' | 'read' | 'search' | 'write' | 'patch' | 'creative' | 'verify' | 'done'
+
+export interface AgentActionStep {
+  id: string
+  type: AgentActionType
+  title: string
+  detail?: string
+  status: 'running' | 'done' | 'error'
+}
+
 export interface MockChatMessage {
   role: 'user' | 'assistant' | 'system'
   text: string
@@ -16,6 +26,8 @@ export interface MockChatMessage {
   process?: string
   /** Model reasoning stream from the generation round, when the channel provides it. */
   reasoning?: string
+  /** 现代 Agent 动态行为轨迹（类 Claude Code / Antigravity 紧凑卡片）。 */
+  steps?: AgentActionStep[]
 }
 
 export interface MockPageState {
