@@ -216,18 +216,27 @@ export interface FastTrackDispatchResult {
 
 async function dispatchConsultTrack(options: FastTrackDispatchOptions): Promise<FastTrackDispatchResult> {
   let fullText = ''
-  const consultStream = executeFastConsultStream({
-    model: options.model,
-    providerID: options.providerID,
-    reasoningEffort: options.reasoningEffort,
-    userPrompt: options.userPrompt,
-    vfsSummary: options.fileList.length > 0 ? options.fileList.join(', ') : undefined
-  })
-  for await (const chunk of consultStream.textStream) {
-    fullText += chunk
-    options.onTextDelta(chunk)
+  try {
+    const consultStream = executeFastConsultStream({
+      model: options.model,
+      providerID: options.providerID,
+      reasoningEffort: options.reasoningEffort,
+      userPrompt: options.userPrompt,
+      vfsSummary: options.fileList.length > 0 ? options.fileList.join(', ') : undefined
+    })
+    for await (const chunk of consultStream.textStream) {
+      fullText += chunk
+      options.onTextDelta(chunk)
+    }
+    return { handled: true, track: 'consult', assistantMessage: fullText }
+  } catch (error) {
+    console.warn('[MockRouter] Consult track stream failed:', error)
+    return {
+      handled: true,
+      track: 'consult',
+      assistantMessage: fullText || '抱歉，当前模型流式服务断开或未输出内容。请检查模型配置与网络连通性。'
+    }
   }
-  return { handled: true, track: 'consult', assistantMessage: fullText }
 }
 
 async function dispatchPatchTrack(
@@ -261,23 +270,28 @@ async function dispatchPatchTrack(
 
 async function dispatchCreativeTrack(options: FastTrackDispatchOptions): Promise<FastTrackDispatchResult | null> {
   let fullText = ''
-  const creativeStream = executeCreativeTrackStream({
-    model: options.model,
-    providerID: options.providerID,
-    reasoningEffort: options.reasoningEffort,
-    userPrompt: options.userPrompt
-  })
-  for await (const chunk of creativeStream.textStream) {
-    fullText += chunk
-    options.onTextDelta(chunk)
-  }
-  const html = extractHTML(fullText)
-  if (!html.trim()) return null
-  return {
-    handled: true,
-    track: 'creative',
-    assistantMessage: '为您直接生成了专属创意视觉与交互成果！中央呈现主舞台与交互控制器。',
-    patchedFiles: { 'index.html': html }
+  try {
+    const creativeStream = executeCreativeTrackStream({
+      model: options.model,
+      providerID: options.providerID,
+      reasoningEffort: options.reasoningEffort,
+      userPrompt: options.userPrompt
+    })
+    for await (const chunk of creativeStream.textStream) {
+      fullText += chunk
+      options.onTextDelta(chunk)
+    }
+    const html = extractHTML(fullText)
+    if (!html.trim()) return null
+    return {
+      handled: true,
+      track: 'creative',
+      assistantMessage: '为您直接生成了专属创意视觉与交互成果！中央呈现主舞台与交互控制器。',
+      patchedFiles: { 'index.html': html }
+    }
+  } catch (error) {
+    console.warn('[MockRouter] Creative track stream failed:', error)
+    return null
   }
 }
 

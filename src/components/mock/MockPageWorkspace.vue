@@ -479,6 +479,11 @@ const AGENT_ERROR_PATTERNS: Array<{
   detail: string
 }> = [
   {
+    pattern: /no\s*output\s*generated|stream\s*ended\s*without|empty\s*stream/i,
+    title: '模型流式响应中断 (No Output Stream)',
+    detail: '上游模型服务未输出任何有效内容即断开连接。建议检查 API Key 额度、接口连通性或切换模型重试。'
+  },
+  {
     pattern: /429|rate\s*limit|quota|exceeded/i,
     title: 'API 请求频率或配额超限 (429 Rate Limit)',
     detail: '模型服务商并发请求超限或额度不足。建议稍候片刻重试，或在设置中检查模型密钥与额度。'
