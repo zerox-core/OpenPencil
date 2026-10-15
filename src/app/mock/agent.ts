@@ -216,6 +216,7 @@ interface MockStreamPart {
   toolName?: string
   input?: unknown
   output?: unknown
+  finishReason?: string
 }
 
 /** 工具事件转发：生成活动标签并回报开始 / 结束。 */
@@ -258,33 +259,68 @@ function forwardToolInputEvent(
   onUpdate?.onToolInputDelta?.(key, inputNames.get(key) ?? '', total, deltaBytes)
 }
 
-/** 消费 agent 流：把文本 / 推理 / 工具事件转发给 onUpdate，并回报管线快照。 */
+interface StreamTrackers {
+  inputBytes: Map<string, number>
+  inputNames: Map<string, string>
+  encoder: TextEncoder
+}
+
+function processStreamPart(
+  part: MockStreamPart,
+  state: MockPipelineState,
+  trackers: StreamTrackers,
+  onUpdate: MockAgentUpdate | undefined
+): { text?: string; isStepFinish?: boolean; finishReason?: string } {
+  if (part.type === 'text-delta' && typeof part.text === 'string') {
+    onUpdate?.onTextDelta?.(part.text)
+    return { text: part.text }
+  }
+  if (part.type === 'reasoning-delta' && typeof part.text === 'string') {
+    onUpdate?.onReasoningDelta?.(part.text)
+    return {}
+  }
+  if (part.type === 'tool-input-start' || part.type === 'tool-input-delta') {
+    forwardToolInputEvent(part, trackers.inputBytes, trackers.inputNames, trackers.encoder, onUpdate)
+    return {}
+  }
+  if (typeof part.toolName === 'string' && (part.type === 'tool-call' || part.type === 'tool-result')) {
+    forwardToolEvent(part, onUpdate)
+    if (part.type === 'tool-result') onUpdate?.onPipelineChange?.(pipelineSnapshot(state))
+    return {}
+  }
+  if (part.type === 'step-finish') {
+    const reason = typeof part.finishReason === 'string' ? part.finishReason : undefined
+    return { isStepFinish: true, finishReason: reason }
+  }
+  return {}
+}
+
+/** 消费 agent 流：把文本 / 推理 / 工具事件转发给 onUpdate，并回报管线快照与实际步数。 */
 async function consumeMockStream(
   stream: { fullStream: AsyncIterable<MockStreamPart> },
   state: MockPipelineState,
   onUpdate: MockAgentUpdate | undefined
-): Promise<string> {
+): Promise<{ fullText: string; stepCount: number; finishReason: string }> {
   let fullText = ''
-  const encoder = new TextEncoder()
-  const inputBytes = new Map<string, number>()
-  const inputNames = new Map<string, string>()
+  let stepCount = 0
+  let finishReason = ''
+  const trackers: StreamTrackers = {
+    inputBytes: new Map<string, number>(),
+    inputNames: new Map<string, string>(),
+    encoder: new TextEncoder()
+  }
   for await (const part of stream.fullStream) {
-    if (part.type === 'text-delta' && typeof part.text === 'string') {
-      fullText += part.text
-      onUpdate?.onTextDelta?.(part.text)
-    } else if (part.type === 'reasoning-delta' && typeof part.text === 'string') {
-      onUpdate?.onReasoningDelta?.(part.text)
-    } else if (part.type === 'tool-input-start' || part.type === 'tool-input-delta') {
-      forwardToolInputEvent(part, inputBytes, inputNames, encoder, onUpdate)
-    } else if (
-      typeof part.toolName === 'string' &&
-      (part.type === 'tool-call' || part.type === 'tool-result')
-    ) {
-      forwardToolEvent(part, onUpdate)
-      if (part.type === 'tool-result') onUpdate?.onPipelineChange?.(pipelineSnapshot(state))
+    const res = processStreamPart(part, state, trackers, onUpdate)
+    if (res.text !== undefined) fullText += res.text
+    if (res.isStepFinish) {
+      stepCount++
+      if (res.finishReason !== undefined) finishReason = res.finishReason
     }
   }
-  return fullText
+  if (stepCount === 0 && (fullText.length > 0 || trackers.inputBytes.size > 0)) {
+    stepCount = 1
+  }
+  return { fullText, stepCount, finishReason }
 }
 
 export async function runMockAgent(options: {
@@ -504,13 +540,19 @@ export async function runMockAgent(options: {
     })
   })
 
-  const fullText = await consumeMockStream(stream, state, options.onUpdate)
+  const maxSteps = options.maxSteps ?? MOCK_AGENT_MAX_STEPS
+  const streamResult = await consumeMockStream(stream, state, options.onUpdate)
+
+  const isStepLimitHit =
+    state.phase !== 'done' &&
+    (state.plan.length > 0 || filesWritten > 0) &&
+    (streamResult.stepCount >= maxSteps || streamResult.finishReason === 'length')
 
   return {
-    fullText,
-    summary: finishSummary || fullText.trim(),
+    fullText: streamResult.fullText,
+    summary: finishSummary || streamResult.fullText.trim(),
     filesWritten,
     pipeline: pipelineSnapshot(state),
-    reachedStepLimit: state.phase !== 'done'
+    reachedStepLimit: isStepLimitHit
   }
 }

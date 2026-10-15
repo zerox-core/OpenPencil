@@ -707,9 +707,6 @@ async function generate() {
     if (!fallback.ok) {
       if (fallback.dialogOnly) {
         state.messages.push({ role: 'assistant', text: result.fullText.trim() })
-        if (result.reachedStepLimit) {
-          state.messages.push({ role: 'system', text: ai.value.mockPageStepLimitReached })
-        }
         return
       }
       errorMsg.value = ai.value.htmlPageNoHtml
