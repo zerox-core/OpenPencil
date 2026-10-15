@@ -70,10 +70,28 @@ const TABLET_WEB: MockDesignNorms = {
   ]
 }
 
-export const MOCK_NORMS_KINDS = ['desktop-web', 'mobile-web', 'tablet-web'] as const
+const CREATIVE_CANVAS: MockDesignNorms = {
+  kind: 'creative-canvas',
+  canvas: { width: 1200, height: 800 },
+  grid: { columns: 1, gutter: 0, margin: 24 },
+  spacingScale: [4, 8, 12, 16, 24, 32, 48, 64],
+  typeScale: { display: 40, h1: 32, h2: 24, h3: 20, lead: 16, body: 14, small: 12 },
+  radiusScale: [4, 8, 12, 16, 24, 9999],
+  colorGuidance: [
+    '主体图形选用高表现力对比配色，背景保持克制纯净（深色暗夜或纯白展示台质感）',
+    '重点突出图形、矢量、骨骼与动效层次，光影细腻'
+  ],
+  structureGuidance: [
+    '创意视觉/动效/Canvas/SVG典型结构：中央主舞台（Stage/Canvas/SVG）+ 悬浮/侧边交互控制条（速度、参数、视角等）',
+    '不强求多板块堆叠，聚焦于核心图形/交互成果的极致表现与细腻动效'
+  ]
+}
+
+export const MOCK_NORMS_KINDS = ['desktop-web', 'mobile-web', 'tablet-web', 'creative-canvas'] as const
 
 export function getMockDesignNorms(kind?: string): MockDesignNorms {
   if (kind === 'mobile-web') return MOBILE_WEB
   if (kind === 'tablet-web') return TABLET_WEB
+  if (kind === 'creative-canvas') return CREATIVE_CANVAS
   return DESKTOP_WEB
 }

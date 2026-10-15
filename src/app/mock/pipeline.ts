@@ -181,9 +181,9 @@ export function submitSkeletonBlockReason(
   if (missing.length > 0) return `骨架文件不齐：需要 ${spec.skeletonRequiredText}`
   const entry = files['index.html'] ?? ''
   if (!entry.trim()) return 'index.html 为空：先写完整的语义结构骨架（含真实文案）'
-  const sectionCount = (entry.match(/<(?:header|nav|main|section|article|aside|footer)\b/gi) ?? []).length
-  if (sectionCount < 2) {
-    return 'index.html 语义板块不足：骨架至少包含 2 个语义标签（header / nav / main / section / article / aside / footer）'
+  const sectionCount = (entry.match(/<(?:header|nav|main|section|article|aside|footer|svg|canvas)\b/gi) ?? []).length
+  if (sectionCount < 1) {
+    return 'index.html 缺少主体结构：骨架至少包含 1 个主体标签（header / nav / main / section / article / aside / footer / svg / canvas）'
   }
   if (/<style\b/i.test(entry)) {
     return '布局骨架阶段不写内联样式：index.html 只放语义结构与真实文案，样式放 styles/base.css'
